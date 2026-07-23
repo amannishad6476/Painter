@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useCMS } from '../context/cmsContext';
 
-const AdminPanel = () => {
+const AdminPanel = ({ onBack }) => {
   const {
     isAuthenticated,
     login,
@@ -372,7 +372,15 @@ const AdminPanel = () => {
   // ----------------------------------------------------
   if (!isAuthenticated) {
     return (
-      <section id="admin" className="py-24 bg-slate-900 text-white min-h-[80vh] flex items-center justify-center">
+      <section id="admin" className="py-24 bg-slate-900 text-white min-h-screen flex items-center justify-center relative">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="absolute top-6 left-6 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-2 border border-slate-700 shadow-md transition-colors"
+          >
+            ← Back to Main Website
+          </button>
+        )}
         <div className="max-w-md w-full p-8 rounded-3xl bg-slate-800 border border-slate-700 shadow-2xl space-y-6 text-center">
           <div className="w-16 h-16 rounded-2xl bg-brand-500/20 text-brand-400 mx-auto flex items-center justify-center border border-brand-500/30">
             <Lock className="w-8 h-8" />
@@ -454,13 +462,23 @@ const AdminPanel = () => {
             </h1>
           </div>
 
-          <button
-            onClick={logout}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-600/10 text-red-600 dark:text-red-400 hover:bg-red-600 hover:text-white border border-red-500/20 text-xs font-bold transition-all"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Logout Admin</span>
-          </button>
+          <div className="flex items-center gap-3">
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-700 text-xs font-bold transition-all"
+              >
+                ← Back to Website
+              </button>
+            )}
+            <button
+              onClick={logout}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-600/10 text-red-600 dark:text-red-400 hover:bg-red-600 hover:text-white border border-red-500/20 text-xs font-bold transition-all"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Logout Admin</span>
+            </button>
+          </div>
         </div>
 
         {/* Sidebar / Tabs Navigation */}

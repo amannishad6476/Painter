@@ -73,6 +73,14 @@ function MainApp() {
   const handleTabChange = (tabId) => {
     setActiveServicePage(null);
     setActiveTab(tabId);
+    if (tabId === 'admin') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      setTimeout(() => {
+        const el = document.getElementById(tabId);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }, 50);
+    }
   };
 
   return (
@@ -89,7 +97,10 @@ function MainApp() {
 
       {/* Main Container */}
       <main>
-        {activeServicePage ? (
+        {activeTab === 'admin' ? (
+          /* Separate Standalone Admin Dashboard View */
+          <AdminPanel onBack={() => handleTabChange('home')} />
+        ) : activeServicePage ? (
           /* Dedicated Service Page View */
           <ServicePage
             serviceSlug={activeServicePage}
@@ -127,9 +138,6 @@ function MainApp() {
 
             {/* Contact Section */}
             <Contact />
-
-            {/* Admin Dashboard Section */}
-            <AdminPanel />
           </>
         )}
       </main>
