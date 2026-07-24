@@ -11,13 +11,43 @@ import Contact from './components/Contact';
 import AdminPanel from './components/AdminPanel';
 import Footer from './components/Footer';
 import FloatingCTA from './components/FloatingCTA';
-import { CMSProvider } from './context/cmsContext';
+import SEO from './components/SEO';
+import { CMSProvider, useCMS } from './context/cmsContext';
 
 function MainApp() {
   const [activeTab, setActiveTab] = useState('home');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [selectedService, setSelectedService] = useState('');
   const [activeServicePage, setActiveServicePage] = useState(null);
+  const { services } = useCMS();
+
+  // Handle URL hash/path routing for deep linking service pages & sections
+  useEffect(() => {
+    const handleLocationChange = () => {
+      const hash = window.location.hash;
+      const pathname = window.location.pathname;
+
+      if (hash.startsWith('#/service/')) {
+        const slug = hash.replace('#/service/', '');
+        setActiveServicePage(slug);
+      } else if (hash.startsWith('#')) {
+        const tab = hash.replace('#', '');
+        if (tab) {
+          setActiveTab(tab);
+          setActiveServicePage(null);
+        }
+      } else if (pathname !== '/' && pathname.length > 1) {
+        const cleanPath = pathname.replace('/', '');
+        if (['house-painting', 'interior-painting', 'exterior-painting', 'texture-painting', 'wall-putty', 'waterproofing', 'pop-design', 'wood-polish'].includes(cleanPath)) {
+          setActiveServicePage(cleanPath);
+        }
+      }
+    };
+
+    handleLocationChange();
+    window.addEventListener('hashchange', handleLocationChange);
+    return () => window.removeEventListener('hashchange', handleLocationChange);
+  }, []);
 
   // Check system dark mode preference or localStorage on mount
   useEffect(() => {
@@ -47,18 +77,21 @@ function MainApp() {
     setSelectedService(serviceTitle);
     setActiveServicePage(null);
     setActiveTab('pricing');
+    window.location.hash = 'pricing';
     const el = document.getElementById('pricing');
     if (el) el.scrollIntoView({ behavior: 'smooth' });
   };
 
   const handleOpenServicePage = (slug) => {
     setActiveServicePage(slug);
+    window.location.hash = `/service/${slug}`;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleGetEstimateClick = () => {
     setActiveServicePage(null);
     setActiveTab('pricing');
+    window.location.hash = 'pricing';
     const el = document.getElementById('pricing');
     if (el) el.scrollIntoView({ behavior: 'smooth' });
   };
@@ -66,6 +99,7 @@ function MainApp() {
   const handleContactClick = () => {
     setActiveServicePage(null);
     setActiveTab('contact');
+    window.location.hash = 'contact';
     const el = document.getElementById('contact');
     if (el) el.scrollIntoView({ behavior: 'smooth' });
   };
@@ -73,6 +107,7 @@ function MainApp() {
   const handleTabChange = (tabId) => {
     setActiveServicePage(null);
     setActiveTab(tabId);
+    window.location.hash = tabId === 'home' ? '' : tabId;
     if (tabId === 'admin') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
@@ -83,9 +118,22 @@ function MainApp() {
     }
   };
 
+  const currentServiceObj = services.find(s => 
+    s.slug === activeServicePage || 
+    s.title.toLowerCase().replace(/\s+/g, '-') === activeServicePage ||
+    s.title.toLowerCase().includes((activeServicePage || '').replace(/-/g, ' '))
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
       
+      {/* Dynamic SEO Meta & Title Manager */}
+      <SEO
+        activeTab={activeTab}
+        activeServicePage={activeServicePage}
+        service={currentServiceObj}
+      />
+
       {/* Sticky Glass Navbar */}
       <Navbar
         activeTab={activeServicePage ? 'services' : activeTab}

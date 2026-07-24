@@ -204,7 +204,13 @@ const Gallery = () => {
                               onClick={() => setActiveMediaModal(item)}
                               className="w-full h-full relative cursor-pointer"
                             >
-                              <img src={mainImage} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                              <img
+                                src={mainImage}
+                                alt={`${item.title} - House Painter Lucknow project in ${item.location}`}
+                                loading="lazy"
+                                decoding="async"
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              />
                               <div className="absolute inset-0 bg-slate-950/40 flex items-center justify-center">
                                 <div className="w-14 h-14 rounded-full bg-brand-500 text-white flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform">
                                   <Play className="w-7 h-7 fill-white ml-1" />
@@ -222,7 +228,9 @@ const Gallery = () => {
                         <div className="relative w-full h-full">
                           <img
                             src={mainImage}
-                            alt={`${item.title} After`}
+                            alt={`${item.title} After Finish - House Painter in Lucknow`}
+                            loading="lazy"
+                            decoding="async"
                             className="absolute inset-0 w-full h-full object-cover"
                           />
                           <span className="absolute top-3 right-3 z-10 px-2.5 py-0.5 rounded-full bg-emerald-500 text-white font-black text-[10px] uppercase shadow-md">
@@ -235,7 +243,9 @@ const Gallery = () => {
                           >
                             <img
                               src={item.beforeImage}
-                              alt={`${item.title} Before`}
+                              alt={`${item.title} Before Painting - Wall Painting Services Lucknow`}
+                              loading="lazy"
+                              decoding="async"
                               className="absolute inset-0 w-full h-full object-cover"
                               style={{ width: '100%', maxWidth: 'none' }}
                             />

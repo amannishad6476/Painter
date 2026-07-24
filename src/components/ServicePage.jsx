@@ -142,7 +142,9 @@ const ServicePage = ({ serviceSlug, onBack, onNavigateContact }) => {
             <div className="h-80 sm:h-96 rounded-2xl overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-700 bg-slate-900">
               <img
                 src={activeImage}
-                alt={`${service.title} Design`}
+                alt={`${service.title} in Lucknow - Professional House Painter & Wall Painting Services`}
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-cover transition-all duration-300"
               />
             </div>
@@ -158,7 +160,7 @@ const ServicePage = ({ serviceSlug, onBack, onNavigateContact }) => {
                       activeImage === img ? 'border-brand-500 scale-105 shadow-md' : 'border-slate-300 dark:border-slate-700 opacity-70'
                     }`}
                   >
-                    <img src={img} alt="Thumbnail" className="w-full h-full object-cover" />
+                    <img src={img} alt={`${service.title} Design sample ${idx + 1} - Painter in Lucknow`} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                   </button>
                 ))}
               </div>
@@ -174,10 +176,10 @@ const ServicePage = ({ serviceSlug, onBack, onNavigateContact }) => {
               Service Price Estimator
             </span>
             <h2 className="text-2xl sm:text-3xl font-bold font-outfit">
-              Calculate {service.title} Cost
+              Calculate {service.title} Cost in Lucknow
             </h2>
             <p className="text-xs sm:text-sm text-slate-400">
-              Enter your room or carpet square footage to calculate estimated cost for {service.title} in Lucknow.
+              Enter your room or carpet square footage to calculate estimated cost for {service.title} by expert House Painter in Lucknow.
             </p>
           </div>
 
@@ -289,6 +291,33 @@ const ServicePage = ({ serviceSlug, onBack, onNavigateContact }) => {
 
             </form>
           )}
+        </div>
+
+        {/* SEO Related Services Internal Links */}
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-6">
+          <h3 className="text-xl font-extrabold text-slate-900 dark:text-white font-outfit">
+            Other Wall Painting Services in Lucknow
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            {services.filter(s => s.title !== service.title).map(other => {
+              const otherSlug = other.slug || other.title.toLowerCase().replace(/\s+/g, '-');
+              return (
+                <a
+                  key={other.id || otherSlug}
+                  href={`#${otherSlug}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    window.location.hash = `/service/${otherSlug}`;
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-brand-500 hover:text-white transition-colors text-slate-800 dark:text-slate-200 font-semibold flex items-center justify-between"
+                >
+                  <span>{other.title} Lucknow</span>
+                  <ArrowRight className="w-3.5 h-3.5 opacity-60" />
+                </a>
+              );
+            })}
+          </div>
         </div>
 
       </div>

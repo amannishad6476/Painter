@@ -71,15 +71,71 @@ const Footer = ({ setActiveTab }) => {
 
           {/* Col 4: Services */}
           <div className="space-y-3">
-            <h4 className="text-white font-bold text-base font-outfit">Gallery Sections</h4>
+            <h4 className="text-white font-bold text-base font-outfit">Painting Services</h4>
             <ul className="space-y-2 text-sm">
-              <li>Interior Painting</li>
-              <li>Exterior Painting</li>
-              <li>POP Design</li>
-              <li>Texture Painting</li>
-              <li>Waterproofing</li>
-              <li>Wood Polish</li>
-              <li>Wall Putty</li>
+              <li>
+                <a
+                  href="#/service/house-painting"
+                  onClick={(e) => { e.preventDefault(); window.location.hash = '/service/house-painting'; window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  className="hover:text-brand-400 transition-colors"
+                >
+                  House Painter Lucknow
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#/service/interior-painting"
+                  onClick={(e) => { e.preventDefault(); window.location.hash = '/service/interior-painting'; window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  className="hover:text-brand-400 transition-colors"
+                >
+                  Interior Painter Lucknow
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#/service/exterior-painting"
+                  onClick={(e) => { e.preventDefault(); window.location.hash = '/service/exterior-painting'; window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  className="hover:text-brand-400 transition-colors"
+                >
+                  Exterior Painting Lucknow
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#/service/texture-painting"
+                  onClick={(e) => { e.preventDefault(); window.location.hash = '/service/texture-painting'; window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  className="hover:text-brand-400 transition-colors"
+                >
+                  Wall Painting Services Lucknow
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#/service/waterproofing"
+                  onClick={(e) => { e.preventDefault(); window.location.hash = '/service/waterproofing'; window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  className="hover:text-brand-400 transition-colors"
+                >
+                  Waterproofing Services
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#/service/wall-putty"
+                  onClick={(e) => { e.preventDefault(); window.location.hash = '/service/wall-putty'; window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  className="hover:text-brand-400 transition-colors"
+                >
+                  Wall Putty &amp; Sanding
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#/service/pop-design"
+                  onClick={(e) => { e.preventDefault(); window.location.hash = '/service/pop-design'; window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  className="hover:text-brand-400 transition-colors"
+                >
+                  POP False Ceiling Design
+                </a>
+              </li>
             </ul>
           </div>
 

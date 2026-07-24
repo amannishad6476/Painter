@@ -100,7 +100,13 @@ const Services = ({ onSelectServiceForEstimate, onOpenServicePage }) => {
                       onClick={() => onOpenServicePage && onOpenServicePage(slug)}
                       className="h-44 rounded-2xl overflow-hidden mb-4 cursor-pointer relative group/img"
                     >
-                      <img src={service.image} alt={service.title} className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300" />
+                      <img
+                        src={service.image}
+                        alt={`${service.title} in Lucknow - Wall Painting Services by House Painter`}
+                        loading="lazy"
+                        decoding="async"
+                        className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300"
+                      />
                       <div className="absolute inset-0 bg-slate-950/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
                         <span className="px-3 py-1.5 rounded-xl bg-white/90 text-slate-900 font-bold text-xs shadow-lg flex items-center gap-1">
                           <Eye className="w-3.5 h-3.5 text-brand-500" />

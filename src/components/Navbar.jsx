@@ -68,7 +68,8 @@ const Navbar = ({ activeTab, setActiveTab, isDarkMode, toggleDarkMode, onOpenSer
           <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md group-hover:scale-105 transition-transform duration-200 border border-slate-200/50 dark:border-slate-700/50 bg-slate-900">
             <img
               src="/assets/logo.png"
-              alt="Lucknow Painter Logo"
+              alt="Munnalal Painter - House Painter & Wall Painting Services Lucknow Logo"
+              decoding="async"
               className="w-full h-full object-cover"
             />
           </div>

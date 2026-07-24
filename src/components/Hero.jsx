@@ -19,7 +19,8 @@ const Hero = ({ onGetEstimateClick, onContactClick }) => {
       <div className="absolute inset-0 z-0">
         <img
           src={banner.bgImage || '/assets/hero.jpg'}
-          alt="Munnalal Painter Lucknow Banner"
+          alt="Painter in Lucknow - Munnalal House Painter & Wall Painting Services Lucknow"
+          decoding="async"
           className="w-full h-full object-cover object-center scale-105 filter brightness-90"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/75 to-slate-900/60 dark:from-slate-950/95 dark:via-slate-950/90 dark:to-slate-950/70" />

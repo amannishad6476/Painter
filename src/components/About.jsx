@@ -29,7 +29,9 @@ const About = () => {
             <div className="aspect-[4/3] rounded-3xl overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800">
               <img
                 src={aboutContent.featureImage || '/assets/texture.jpg'}
-                alt="Luxury Painting Lucknow"
+                alt="Professional House Painter in Lucknow performing Wall Painting Services"
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-cover"
               />
             </div>
