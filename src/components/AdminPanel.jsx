@@ -14,6 +14,7 @@ const AdminPanel = ({ onBack }) => {
     login,
     logout,
     changePasscode,
+    setupInitialPassword,
     getRateLimitStatus,
     validatePasswordStrength,
     convertFileToBase64,
@@ -75,6 +76,62 @@ const AdminPanel = ({ onBack }) => {
     const m = Math.floor(totalSecs / 60);
     const s = totalSecs % 60;
     return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  // ── First-time setup state ─────────────────────────────────────────────
+  const [setupPass, setSetupPass] = useState('');
+  const [setupConfirm, setSetupConfirm] = useState('');
+  const [showSetupPass, setShowSetupPass] = useState(false);
+  const [showSetupConfirm, setShowSetupConfirm] = useState(false);
+  const [setupErrors, setSetupErrors] = useState([]);
+  const [setupMessage, setSetupMessage] = useState('');
+  const [setupIsLoading, setSetupIsLoading] = useState(false);
+
+  // Compute strength for setup form password (reuses same scoring logic)
+  const getSetupStrength = (p) => {
+    if (!p) return { score: 0, label: '', color: '', textColor: '' };
+    let score = 0;
+    if (p.length >= 8) score++;
+    if (/[A-Z]/.test(p) && /[a-z]/.test(p)) score++;
+    if (/[0-9]/.test(p) && /[^A-Za-z0-9]/.test(p)) score++;
+    if (score === 1) return { score: 1, label: 'Weak',   color: 'bg-red-500',     textColor: 'text-red-400' };
+    if (score === 2) return { score: 2, label: 'Medium', color: 'bg-amber-400',   textColor: 'text-amber-400' };
+    if (score === 3) return { score: 3, label: 'Strong', color: 'bg-emerald-500', textColor: 'text-emerald-400' };
+    return { score: 0, label: '', color: '', textColor: '' };
+  };
+  const setupStrength = getSetupStrength(setupPass);
+
+  const handleSetupPassChange = (val) => {
+    setSetupPass(val);
+    if (val.length > 0) {
+      const { errors } = validatePasswordStrength(val);
+      setSetupErrors(errors);
+    } else {
+      setSetupErrors([]);
+    }
+  };
+
+  const handleSetupSubmit = async (e) => {
+    e.preventDefault();
+    if (setupIsLoading) return;
+    const { valid, errors } = validatePasswordStrength(setupPass);
+    if (!valid) { setSetupErrors(errors); return; }
+    if (setupPass !== setupConfirm) {
+      setSetupMessage('Passwords do not match.');
+      return;
+    }
+    setSetupIsLoading(true);
+    setSetupMessage('');
+    try {
+      const res = await setupInitialPassword(setupPass);
+      if (!res.success) {
+        setSetupErrors(res.errors || []);
+        setSetupMessage(res.error || 'Setup failed. Please try again.');
+      }
+      // On success: isAuthenticated flips to true via context → component re-renders to dashboard
+    } finally {
+      setSetupIsLoading(false);
+    }
   };
 
   // Active dashboard tab
@@ -477,92 +534,212 @@ const AdminPanel = ({ onBack }) => {
           </button>
         )}
         <div className="max-w-md w-full p-8 rounded-3xl bg-slate-800 border border-slate-700 shadow-2xl space-y-6 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-brand-500/20 text-brand-400 mx-auto flex items-center justify-center border border-brand-500/30">
-            <Lock className="w-8 h-8" />
+
+          {/* Icon + Title */}
+          <div className={`w-16 h-16 rounded-2xl mx-auto flex items-center justify-center border ${needsSetup ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-brand-500/20 text-brand-400 border-brand-500/30'}`}>
+            {needsSetup ? <ShieldCheck className="w-8 h-8" /> : <Lock className="w-8 h-8" />}
           </div>
           <div>
-            <h2 className="text-2xl font-bold font-outfit">Munnalal Painter CMS</h2>
-            <p className="text-xs text-slate-400 mt-1">Admin Portal Login for Content, Portfolio & Video Management</p>
+            <h2 className="text-2xl font-bold font-outfit">
+              {needsSetup ? 'Create Admin Password' : 'Munnalal Painter CMS'}
+            </h2>
+            <p className="text-xs text-slate-400 mt-1">
+              {needsSetup
+                ? 'First-time setup: create a strong password to secure your admin panel.'
+                : 'Admin Portal Login for Content, Portfolio & Video Management'}
+            </p>
           </div>
 
-          <form onSubmit={handleLoginSubmit} className="space-y-4 text-left">
-            {/* Lockout Banner */}
-            {loginLocked && (
-              <div className="p-4 rounded-xl bg-red-900/70 border border-red-600 text-red-200 text-xs font-semibold space-y-1">
-                <div className="flex items-center gap-2">
+          {/* ── FIRST-TIME SETUP FORM ── */}
+          {needsSetup ? (
+            <form onSubmit={handleSetupSubmit} className="space-y-4 text-left">
+              {/* Intro banner */}
+              <div className="p-3 rounded-xl bg-amber-900/40 border border-amber-700/60 text-amber-200 text-[11px] flex items-start gap-2">
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
+                <span>No admin password has been set yet. Create one below to get started. You will be logged in automatically.</span>
+              </div>
+
+              {/* Error / message */}
+              {setupMessage && (
+                <div className="p-3 rounded-xl bg-red-900/60 border border-red-700 text-red-200 text-xs font-semibold flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                  <span className="font-bold text-red-300">Account Locked</span>
+                  <span>{setupMessage}</span>
                 </div>
-                <p>Too many failed attempts. Try again in:</p>
-                <div className="text-3xl font-bold text-red-300 tracking-widest text-center py-1">
-                  {formatCountdown(loginLockMs)}
-                </div>
-                <p className="text-[10px] text-red-400 text-center">Rate limit: 5 attempts / 15-minute lockout</p>
-              </div>
-            )}
-
-            {/* Error message (non-lockout) */}
-            {loginError && !loginLocked && (
-              <div className="p-3.5 rounded-xl bg-red-900/60 border border-red-700 text-red-200 text-xs font-semibold flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                <span>{loginError}</span>
-              </div>
-            )}
-
-            {/* First-time setup notice */}
-            {needsSetup && !loginLocked && (
-              <div className="p-3.5 rounded-xl bg-amber-900/50 border border-amber-700 text-amber-200 text-xs font-semibold flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                <span>First-time setup: No admin password has been set yet. Please use the Settings tab after logging in — or ask your administrator.</span>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
-                Admin Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPasscode ? "text" : "password"}
-                  placeholder="Enter admin password"
-                  value={passcode}
-                  onChange={e => setPasscode(e.target.value)}
-                  disabled={loginLocked || loginIsLoading}
-                  className="w-full px-4 py-3.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:ring-2 focus:ring-brand-500 outline-none pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPasscode(!showPasscode)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                >
-                  {showPasscode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loginLocked || loginIsLoading}
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-brand-500 to-amber-500 hover:from-brand-600 hover:to-amber-600 font-bold text-sm text-white shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {loginIsLoading ? (
-                <><RefreshCw className="w-4 h-4 animate-spin" /> Verifying…</>
-              ) : loginLocked ? (
-                <><Lock className="w-4 h-4" /> Locked — Wait {formatCountdown(loginLockMs)}</>
-              ) : (
-                'Unlock Admin Dashboard'
               )}
-            </button>
 
-            {/* Security note */}
-            <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-700/50 text-[10px] text-slate-500 text-center space-y-0.5">
-              <div className="flex items-center justify-center gap-1.5">
-                <ShieldCheck className="w-3 h-3 text-emerald-500" />
-                <span className="text-emerald-400 font-semibold">Secured with PBKDF2-SHA256 hashing</span>
+              {/* New Password */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold uppercase text-slate-400">New Password</label>
+                <div className="relative">
+                  <input
+                    type={showSetupPass ? 'text' : 'password'}
+                    required
+                    placeholder="min 8 chars, 1 uppercase, 1 number, 1 symbol"
+                    value={setupPass}
+                    onChange={e => handleSetupPassChange(e.target.value)}
+                    className="w-full px-4 py-3.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:ring-2 focus:ring-brand-500 outline-none pr-10"
+                  />
+                  <button type="button" onClick={() => setShowSetupPass(!showSetupPass)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">
+                    {showSetupPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                {/* Strength bar */}
+                {setupPass.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="flex gap-1 h-1.5">
+                      {[1, 2, 3].map(step => (
+                        <div key={step} className={`flex-1 rounded-full transition-all duration-300 ${setupStrength.score >= step ? setupStrength.color : 'bg-slate-700'}`} />
+                      ))}
+                    </div>
+                    <div className="flex justify-between">
+                      <span className={`text-[11px] font-bold ${setupStrength.textColor || 'text-slate-500'}`}>
+                        {setupStrength.label ? `Strength: ${setupStrength.label}` : 'Too short'}
+                      </span>
+                      <span className="text-[11px] text-slate-500">{setupPass.length} chars</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Per-criterion errors */}
+                {setupErrors.length > 0 && (
+                  <div className="space-y-1">
+                    {setupErrors.map((err, i) => (
+                      <div key={i} className="flex items-center gap-1.5 text-[11px] text-red-400">
+                        <AlertCircle className="w-3 h-3 flex-shrink-0" /><span>{err}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {setupErrors.length === 0 && setupPass.length >= 8 && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-emerald-400">
+                    <CheckCircle className="w-3 h-3 flex-shrink-0" /><span>All requirements met</span>
+                  </div>
+                )}
               </div>
-              <div>Rate limit: 5 failed attempts triggers 15-min lockout</div>
-            </div>
-          </form>
+
+              {/* Confirm Password */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold uppercase text-slate-400">Confirm Password</label>
+                <div className="relative">
+                  <input
+                    type={showSetupConfirm ? 'text' : 'password'}
+                    required
+                    placeholder="Re-enter the same password"
+                    value={setupConfirm}
+                    onChange={e => setSetupConfirm(e.target.value)}
+                    className={`w-full px-4 py-3.5 rounded-xl bg-slate-900 border text-white text-sm focus:ring-2 focus:ring-brand-500 outline-none pr-10 ${setupConfirm.length > 0 && setupConfirm !== setupPass ? 'border-red-600' : 'border-slate-700'}`}
+                  />
+                  <button type="button" onClick={() => setShowSetupConfirm(!showSetupConfirm)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">
+                    {showSetupConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {setupConfirm.length > 0 && setupConfirm !== setupPass && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-red-400">
+                    <AlertCircle className="w-3 h-3 flex-shrink-0" /><span>Passwords do not match</span>
+                  </div>
+                )}
+                {setupConfirm.length > 0 && setupConfirm === setupPass && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-emerald-400">
+                    <CheckCircle className="w-3 h-3 flex-shrink-0" /><span>Passwords match</span>
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={setupIsLoading || setupErrors.length > 0 || (setupConfirm.length > 0 && setupConfirm !== setupPass)}
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-brand-500 hover:from-amber-600 hover:to-brand-600 font-bold text-sm text-white shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {setupIsLoading
+                  ? <><RefreshCw className="w-4 h-4 animate-spin" /> Creating Password…</>
+                  : <><ShieldCheck className="w-4 h-4" /> Create Password & Enter Dashboard</>
+                }
+              </button>
+
+              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-700/50 text-[10px] text-slate-500 text-center space-y-0.5">
+                <div className="flex items-center justify-center gap-1.5">
+                  <ShieldCheck className="w-3 h-3 text-emerald-500" />
+                  <span className="text-emerald-400 font-semibold">Secured with PBKDF2-SHA256 hashing</span>
+                </div>
+                <div>Password never stored in plain text</div>
+              </div>
+            </form>
+          ) : (
+            /* ── STANDARD LOGIN FORM ── */
+            <form onSubmit={handleLoginSubmit} className="space-y-4 text-left">
+              {/* Lockout Banner */}
+              {loginLocked && (
+                <div className="p-4 rounded-xl bg-red-900/70 border border-red-600 text-red-200 text-xs font-semibold space-y-1">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                    <span className="font-bold text-red-300">Account Locked</span>
+                  </div>
+                  <p>Too many failed attempts. Try again in:</p>
+                  <div className="text-3xl font-bold text-red-300 tracking-widest text-center py-1">
+                    {formatCountdown(loginLockMs)}
+                  </div>
+                  <p className="text-[10px] text-red-400 text-center">Rate limit: 5 attempts / 15-minute lockout</p>
+                </div>
+              )}
+
+              {/* Error message (non-lockout) */}
+              {loginError && !loginLocked && (
+                <div className="p-3.5 rounded-xl bg-red-900/60 border border-red-700 text-red-200 text-xs font-semibold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                  <span>{loginError}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                  Admin Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPasscode ? "text" : "password"}
+                    placeholder="Enter admin password"
+                    value={passcode}
+                    onChange={e => setPasscode(e.target.value)}
+                    disabled={loginLocked || loginIsLoading}
+                    className="w-full px-4 py-3.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:ring-2 focus:ring-brand-500 outline-none pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPasscode(!showPasscode)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                  >
+                    {showPasscode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loginLocked || loginIsLoading}
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-brand-500 to-amber-500 hover:from-brand-600 hover:to-amber-600 font-bold text-sm text-white shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loginIsLoading ? (
+                  <><RefreshCw className="w-4 h-4 animate-spin" /> Verifying…</>
+                ) : loginLocked ? (
+                  <><Lock className="w-4 h-4" /> Locked — Wait {formatCountdown(loginLockMs)}</>
+                ) : (
+                  'Unlock Admin Dashboard'
+                )}
+              </button>
+
+              {/* Security note */}
+              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-700/50 text-[10px] text-slate-500 text-center space-y-0.5">
+                <div className="flex items-center justify-center gap-1.5">
+                  <ShieldCheck className="w-3 h-3 text-emerald-500" />
+                  <span className="text-emerald-400 font-semibold">Secured with PBKDF2-SHA256 hashing</span>
+                </div>
+                <div>Rate limit: 5 failed attempts triggers 15-min lockout</div>
+              </div>
+            </form>
+          )}
         </div>
       </section>
     );

@@ -562,6 +562,28 @@ export const CMSProvider = ({ children }) => {
     }
   };
 
+  // ─── First-time setup: hash password AND auto-authenticate in one step ───
+  // Called from the login screen when needsSetup === true. On success the
+  // admin is immediately logged in without a separate login step.
+  const setupInitialPassword = async (newPass) => {
+    const { valid, errors } = validatePasswordStrength(newPass || '');
+    if (!valid) {
+      return { success: false, errors, error: errors[0] };
+    }
+    try {
+      const { hash, salt } = await hashPassword(newPass);
+      localStorage.setItem(HASH_KEY, JSON.stringify({ hash, salt }));
+      localStorage.removeItem('munnalal_admin_pass'); // clean up legacy key
+      setNeedsSetup(false);
+      // Auto-login immediately after setup
+      setIsAuthenticated(true);
+      sessionStorage.setItem('munnalal_admin_auth', 'true');
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: 'Failed to create password. Please try again.' };
+    }
+  };
+
   // Convert File object to Base64 String
   const convertFileToBase64 = (file) => {
     return new Promise((resolve, reject) => {
@@ -654,6 +676,7 @@ export const CMSProvider = ({ children }) => {
       logout,
       changePasscode,
       getRateLimitStatus,
+      setupInitialPassword,
       validatePasswordStrength,
       convertFileToBase64,
       contactInfo,
