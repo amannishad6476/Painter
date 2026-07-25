@@ -278,13 +278,83 @@ const defaultTestimonials = [
   }
 ];
 
+// ─── Security Constants ────────────────────────────────────────────────────
+const HASH_KEY       = 'munnalal_admin_hash';   // { hash: string, salt: string }
+const RATE_KEY       = 'munnalal_rate_limit';    // { attempts: number, lockedUntil: number }
+const MAX_ATTEMPTS   = 5;
+const LOCKOUT_MS     = 15 * 60 * 1000; // 15 minutes
+
+/** Encode ArrayBuffer → base64 string */
+const ab2b64 = (buf) =>
+  btoa(String.fromCharCode(...new Uint8Array(buf)));
+
+/** Decode base64 string → Uint8Array */
+const b642ab = (b64) =>
+  Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+
+/**
+ * Hash a plaintext password using PBKDF2-SHA256 (100 000 iterations).
+ * Returns { hash: string (base64), salt: string (base64) }.
+ */
+const hashPassword = async (password) => {
+  const enc    = new TextEncoder();
+  const saltBuf = crypto.getRandomValues(new Uint8Array(16));
+  const keyMat  = await crypto.subtle.importKey(
+    'raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']
+  );
+  const derived = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: saltBuf, iterations: 100_000 },
+    keyMat, 256
+  );
+  return { hash: ab2b64(derived), salt: ab2b64(saltBuf) };
+};
+
+/**
+ * Verify a plaintext password against a stored { hash, salt }.
+ * Returns true if they match.
+ */
+const verifyPassword = async (password, storedHash, storedSalt) => {
+  const enc     = new TextEncoder();
+  const saltBuf = b642ab(storedSalt);
+  const keyMat  = await crypto.subtle.importKey(
+    'raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']
+  );
+  const derived = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: saltBuf, iterations: 100_000 },
+    keyMat, 256
+  );
+  return ab2b64(derived) === storedHash;
+};
+
+/**
+ * Validate password complexity.
+ * Returns { valid: boolean, errors: string[] }
+ */
+export const validatePasswordStrength = (password) => {
+  const errors = [];
+  if (!password || password.length < 8)
+    errors.push('At least 8 characters required.');
+  if (!/[A-Z]/.test(password))
+    errors.push('Must contain at least 1 uppercase letter.');
+  if (!/[a-z]/.test(password))
+    errors.push('Must contain at least 1 lowercase letter.');
+  if (!/[0-9]/.test(password))
+    errors.push('Must contain at least 1 number.');
+  if (!/[^A-Za-z0-9]/.test(password))
+    errors.push('Must contain at least 1 special character (@, #, $, %, etc.).');
+  return { valid: errors.length === 0, errors };
+};
+
 export const CMSProvider = ({ children }) => {
-  // Auth state
-  const [adminPasscode, setAdminPasscode] = useState(() => {
-    return localStorage.getItem('munnalal_admin_pass') || 'admin123';
-  });
+  // Auth state — no plain-text password is ever held in React state.
+  // We only track whether the session is authenticated.
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return sessionStorage.getItem('munnalal_admin_auth') === 'true';
+  });
+
+  // Detect first-time setup (no hash stored yet)
+  const [needsSetup, setNeedsSetup] = useState(() => {
+    return !localStorage.getItem(HASH_KEY);
   });
 
   // Content states
@@ -370,18 +440,103 @@ export const CMSProvider = ({ children }) => {
     localStorage.setItem('munnalal_leads', JSON.stringify(contactLeads));
   }, [contactLeads]);
 
-  useEffect(() => {
-    localStorage.setItem('munnalal_admin_pass', adminPasscode);
-  }, [adminPasscode]);
+  // ─── Rate-limit helpers ──────────────────────────────────────────────────
+  const getRateLimitStatus = () => {
+    try {
+      const raw = sessionStorage.getItem(RATE_KEY);
+      if (!raw) return { locked: false, attempts: 0, lockedUntil: null, remaining: MAX_ATTEMPTS };
+      const data = JSON.parse(raw);
+      const now  = Date.now();
+      if (data.lockedUntil && now < data.lockedUntil) {
+        return {
+          locked: true,
+          attempts: data.attempts,
+          lockedUntil: data.lockedUntil,
+          msRemaining: data.lockedUntil - now,
+          remaining: 0
+        };
+      }
+      // Lockout expired — reset
+      if (data.lockedUntil && now >= data.lockedUntil) {
+        sessionStorage.removeItem(RATE_KEY);
+        return { locked: false, attempts: 0, lockedUntil: null, remaining: MAX_ATTEMPTS };
+      }
+      return {
+        locked: false,
+        attempts: data.attempts || 0,
+        lockedUntil: null,
+        remaining: MAX_ATTEMPTS - (data.attempts || 0)
+      };
+    } catch {
+      return { locked: false, attempts: 0, lockedUntil: null, remaining: MAX_ATTEMPTS };
+    }
+  };
 
-  // Login handler
-  const login = (pass) => {
-    if (pass === adminPasscode || pass === 'admin123' || pass === 'admin') {
+  const recordFailedAttempt = () => {
+    const status = getRateLimitStatus();
+    const newAttempts = (status.attempts || 0) + 1;
+    const payload = { attempts: newAttempts };
+    if (newAttempts >= MAX_ATTEMPTS) {
+      payload.lockedUntil = Date.now() + LOCKOUT_MS;
+    }
+    sessionStorage.setItem(RATE_KEY, JSON.stringify(payload));
+    return payload;
+  };
+
+  const resetRateLimit = () => {
+    sessionStorage.removeItem(RATE_KEY);
+  };
+
+  // ─── Login (async, PBKDF2-verified) ─────────────────────────────────────
+  const login = async (pass) => {
+    // Check rate-limit first
+    const status = getRateLimitStatus();
+    if (status.locked) {
+      const mins = Math.ceil(status.msRemaining / 60000);
+      return {
+        success: false,
+        locked: true,
+        error: `Too many failed attempts. Try again in ${mins} minute${mins === 1 ? '' : 's'}.`,
+        msRemaining: status.msRemaining
+      };
+    }
+
+    // First-time setup: no hash stored yet
+    const storedRaw = localStorage.getItem(HASH_KEY);
+    if (!storedRaw) {
+      return {
+        success: false,
+        needsSetup: true,
+        error: 'No admin password set yet. Please set a password below.'
+      };
+    }
+
+    const { hash, salt } = JSON.parse(storedRaw);
+    const matches = await verifyPassword(pass, hash, salt);
+
+    if (matches) {
+      resetRateLimit();
       setIsAuthenticated(true);
       sessionStorage.setItem('munnalal_admin_auth', 'true');
       return { success: true };
     }
-    return { success: false, error: 'Invalid passcode! Try admin123' };
+
+    // Wrong password
+    const updated = recordFailedAttempt();
+    const attemptsLeft = MAX_ATTEMPTS - updated.attempts;
+    if (attemptsLeft <= 0) {
+      return {
+        success: false,
+        locked: true,
+        error: `Too many failed attempts. Account locked for 15 minutes.`,
+        msRemaining: LOCKOUT_MS
+      };
+    }
+    return {
+      success: false,
+      error: `Incorrect password. ${attemptsLeft} attempt${attemptsLeft === 1 ? '' : 's'} remaining before lockout.`,
+      attemptsLeft
+    };
   };
 
   const logout = () => {
@@ -389,12 +544,22 @@ export const CMSProvider = ({ children }) => {
     sessionStorage.removeItem('munnalal_admin_auth');
   };
 
-  const changePasscode = (newPass) => {
-    if (!newPass || newPass.trim().length < 4) {
-      return { success: false, error: 'Passcode must be at least 4 characters long.' };
+  // ─── Change passcode (async, validates strength + hashes) ───────────────
+  const changePasscode = async (newPass) => {
+    const { valid, errors } = validatePasswordStrength(newPass || '');
+    if (!valid) {
+      return { success: false, errors, error: errors[0] };
     }
-    setAdminPasscode(newPass.trim());
-    return { success: true };
+    try {
+      const { hash, salt } = await hashPassword(newPass);
+      localStorage.setItem(HASH_KEY, JSON.stringify({ hash, salt }));
+      // Remove legacy plain-text key if present
+      localStorage.removeItem('munnalal_admin_pass');
+      setNeedsSetup(false);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: 'Failed to hash password. Please try again.' };
+    }
   };
 
   // Convert File object to Base64 String
@@ -484,9 +649,12 @@ export const CMSProvider = ({ children }) => {
   return (
     <CMSContext.Provider value={{
       isAuthenticated,
+      needsSetup,
       login,
       logout,
       changePasscode,
+      getRateLimitStatus,
+      validatePasswordStrength,
       convertFileToBase64,
       contactInfo,
       updateContactInfo,
