@@ -405,29 +405,32 @@ export const CMSProvider = ({ children }) => {
 
   const API_BASE = import.meta.env.VITE_API_URL || 'https://painter-backend-one.vercel.app/api/cms';
 
-  // Load all initial content from backend DB on component mount
-  useEffect(() => {
-    const fetchCMSData = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/all`);
-        const json = await res.json();
-        if (json.success) {
-          if (json.contactInfo) setContactInfo(json.contactInfo);
-          if (json.mapInfo) setMapInfo(json.mapInfo);
-          if (json.banner) setBanner(json.banner);
-          if (json.aboutContent) setAboutContent(json.aboutContent);
-          if (Array.isArray(json.services) && json.services.length > 0) setServices(json.services);
-          if (Array.isArray(json.gallery) && json.gallery.length > 0) setGallery(json.gallery);
-          if (Array.isArray(json.testimonials) && json.testimonials.length > 0) setTestimonials(json.testimonials);
-          if (Array.isArray(json.estimates)) setEstimates(json.estimates);
-          if (Array.isArray(json.contactLeads)) setContactLeads(json.contactLeads);
-          if (json.hasAdminAuth) setNeedsSetup(false);
-        }
-      } catch (err) {
-        console.warn('Backend server disconnected or starting up. Falling back to local state:', err);
+  // Load all content from backend DB
+  const refreshCMSData = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/all`);
+      const json = await res.json();
+      if (json.success) {
+        if (json.contactInfo) setContactInfo(json.contactInfo);
+        if (json.mapInfo) setMapInfo(json.mapInfo);
+        if (json.banner) setBanner(json.banner);
+        if (json.aboutContent) setAboutContent(json.aboutContent);
+        if (Array.isArray(json.services) && json.services.length > 0) setServices(json.services);
+        if (Array.isArray(json.gallery) && json.gallery.length > 0) setGallery(json.gallery);
+        if (Array.isArray(json.testimonials)) setTestimonials(json.testimonials);
+        if (Array.isArray(json.estimates)) setEstimates(json.estimates);
+        if (Array.isArray(json.contactLeads)) setContactLeads(json.contactLeads);
+        if (json.hasAdminAuth) setNeedsSetup(false);
       }
-    };
-    fetchCMSData();
+      return json;
+    } catch (err) {
+      console.warn('Backend server disconnected or starting up. Falling back to local state:', err);
+      return { success: false, error: err.message };
+    }
+  };
+
+  useEffect(() => {
+    refreshCMSData();
   }, []);
 
   // Save changes to LocalStorage as offline cache
@@ -884,6 +887,7 @@ export const CMSProvider = ({ children }) => {
 
   return (
     <CMSContext.Provider value={{
+      refreshCMSData,
       isAuthenticated,
       needsSetup,
       login,

@@ -9,6 +9,7 @@ import { useCMS } from '../context/cmsContext';
 
 const AdminPanel = ({ onBack }) => {
   const {
+    refreshCMSData,
     isAuthenticated,
     needsSetup,
     login,
@@ -43,6 +44,25 @@ const AdminPanel = ({ onBack }) => {
     contactLeads,
     deleteContactLead
   } = useCMS();
+
+  const [isSyncingDb, setIsSyncingDb] = useState(false);
+
+  // Auto-sync data from PostgreSQL DB every 25s when admin is authenticated
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    refreshCMSData();
+    const interval = setInterval(() => {
+      refreshCMSData();
+    }, 25000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
+
+  const handleSyncDatabase = async () => {
+    setIsSyncingDb(true);
+    await refreshCMSData();
+    setIsSyncingDb(false);
+    showToast('Database Synced with PostgreSQL!');
+  };
 
   // Login form state
   const [passcode, setPasscode] = useState('');
@@ -773,6 +793,15 @@ const AdminPanel = ({ onBack }) => {
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleSyncDatabase}
+              disabled={isSyncingDb}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-600 hover:text-white border border-emerald-500/20 text-xs font-bold transition-all disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${isSyncingDb ? 'animate-spin' : ''}`} />
+              <span>{isSyncingDb ? 'Syncing DB...' : 'Sync Database'}</span>
+            </button>
             {onBack && (
               <button
                 onClick={onBack}
@@ -1891,7 +1920,21 @@ const AdminPanel = ({ onBack }) => {
               <div className="space-y-8">
                 {/* Contact Submissions */}
                 <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">Direct Contact Inquiries ({contactLeads.length})</h3>
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900 dark:text-white">Direct Contact Inquiries ({contactLeads.length})</h3>
+                      <p className="text-xs text-slate-500 mt-0.5">Messages sent directly from website visitors via the contact form</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSyncDatabase}
+                      disabled={isSyncingDb}
+                      className="px-3.5 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isSyncingDb ? 'animate-spin' : ''}`} />
+                      <span>Sync Inquiries</span>
+                    </button>
+                  </div>
                   {contactLeads.length === 0 ? (
                     <p className="text-xs text-slate-500 py-4">No contact messages received yet.</p>
                   ) : (
