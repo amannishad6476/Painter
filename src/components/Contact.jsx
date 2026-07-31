@@ -26,7 +26,7 @@ const Contact = () => {
 
     setLoading(true);
     try {
-      addContactLead(formData);
+      await addContactLead(formData);
       setLoading(false);
       setSubmitted(true);
     } catch (err) {

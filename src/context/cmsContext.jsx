@@ -784,17 +784,24 @@ export const CMSProvider = ({ children }) => {
   };
 
   // Testimonials CRUD with API sync
-  const addTestimonial = (item) => {
+  const addTestimonial = async (item) => {
     const newItem = { id: 't_' + Date.now(), date: 'Just now', ...item };
     setTestimonials(prev => [newItem, ...prev]);
-    fetch(`${API_BASE}/testimonials`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newItem)
-    }).catch(err => console.warn('Backend sync addTestimonial failed:', err));
+    try {
+      const res = await fetch(`${API_BASE}/testimonials`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newItem)
+      });
+      return await res.json();
+    } catch (err) {
+      console.warn('Backend sync addTestimonial failed:', err);
+      return { success: false, error: err.message };
+    }
   };
 
-  const updateTestimonial = (id, data) => {
+  const updateTestimonial = async (id, data) => {
+    let result = { success: false };
     setTestimonials(prev => {
       const updated = prev.map(t => t.id === id ? { ...t, ...data } : t);
       const target = updated.find(t => t.id === id);
@@ -807,48 +814,72 @@ export const CMSProvider = ({ children }) => {
       }
       return updated;
     });
+    return result;
   };
 
-  const deleteTestimonial = (id) => {
+  const deleteTestimonial = async (id) => {
     setTestimonials(prev => prev.filter(t => t.id !== id));
-    fetch(`${API_BASE}/testimonials/${id}`, {
-      method: 'DELETE'
-    }).catch(err => console.warn('Backend sync deleteTestimonial failed:', err));
+    try {
+      await fetch(`${API_BASE}/testimonials/${id}`, {
+        method: 'DELETE'
+      });
+    } catch (err) {
+      console.warn('Backend sync deleteTestimonial failed:', err);
+    }
   };
 
   // Leads with API sync
-  const addEstimate = (estimate) => {
+  const addEstimate = async (estimate) => {
     const newEst = { id: 'est_' + Date.now(), createdAt: new Date().toISOString(), ...estimate };
     setEstimates(prev => [newEst, ...prev]);
-    fetch(`${API_BASE}/estimates`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newEst)
-    }).catch(err => console.warn('Backend sync addEstimate failed:', err));
+    try {
+      const res = await fetch(`${API_BASE}/estimates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newEst)
+      });
+      return await res.json();
+    } catch (err) {
+      console.warn('Backend sync addEstimate failed:', err);
+    }
   };
 
-  const deleteEstimate = (id) => {
+  const deleteEstimate = async (id) => {
     setEstimates(prev => prev.filter(e => e.id !== id));
-    fetch(`${API_BASE}/estimates/${id}`, {
-      method: 'DELETE'
-    }).catch(err => console.warn('Backend sync deleteEstimate failed:', err));
+    try {
+      await fetch(`${API_BASE}/estimates/${id}`, {
+        method: 'DELETE'
+      });
+    } catch (err) {
+      console.warn('Backend sync deleteEstimate failed:', err);
+    }
   };
 
-  const addContactLead = (lead) => {
+  const addContactLead = async (lead) => {
     const newLead = { id: 'lead_' + Date.now(), createdAt: new Date().toISOString(), ...lead };
     setContactLeads(prev => [newLead, ...prev]);
-    fetch(`${API_BASE}/leads`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newLead)
-    }).catch(err => console.warn('Backend sync addContactLead failed:', err));
+    try {
+      const res = await fetch(`${API_BASE}/leads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newLead)
+      });
+      return await res.json();
+    } catch (err) {
+      console.warn('Backend sync addContactLead failed:', err);
+      return { success: false, error: err.message };
+    }
   };
 
-  const deleteContactLead = (id) => {
+  const deleteContactLead = async (id) => {
     setContactLeads(prev => prev.filter(l => l.id !== id));
-    fetch(`${API_BASE}/leads/${id}`, {
-      method: 'DELETE'
-    }).catch(err => console.warn('Backend sync deleteContactLead failed:', err));
+    try {
+      await fetch(`${API_BASE}/leads/${id}`, {
+        method: 'DELETE'
+      });
+    } catch (err) {
+      console.warn('Backend sync deleteContactLead failed:', err);
+    }
   };
 
   return (

@@ -102,7 +102,7 @@ const ReviewModal = ({ isOpen, onClose }) => {
       if (form.photo) {
         avatarData = await convertFileToBase64(form.photo);
       }
-      addTestimonial({
+      await addTestimonial({
         name: form.name.trim(),
         location: form.location.trim(),
         projectCategory: form.service,
