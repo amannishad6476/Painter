@@ -33,15 +33,17 @@ app.get('/', (req, res) => {
   res.send('Lucknow Painter Backend API Server is Active');
 });
 
-// Initialize database and start listening
-initDb().then(() => {
+// Initialize database tables & default data asynchronously
+initDb().catch(err => {
+  console.error('Database initialization warning:', err);
+});
+
+// Start local server if not running serverlessly on Vercel
+if (!process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`🚀 Lucknow Painter Backend Server running on http://localhost:${PORT}`);
     console.log(`📡 CMS API available at http://localhost:${PORT}/api/cms/all`);
   });
-}).catch(err => {
-  console.error('Failed to initialize database:', err);
-  app.listen(PORT, () => {
-    console.log(`⚠️ Lucknow Painter Backend running in fallback mode on http://localhost:${PORT}`);
-  });
-});
+}
+
+export default app;
