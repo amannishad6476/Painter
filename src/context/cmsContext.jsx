@@ -403,7 +403,7 @@ export const CMSProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : [];
   });
 
-  const API_BASE = import.meta.env.VITE_API_URL || '/api/cms';
+  const API_BASE = import.meta.env.VITE_API_URL || 'https://painter-backend-one.vercel.app/api/cms';
 
   // Load all initial content from backend DB on component mount
   useEffect(() => {
