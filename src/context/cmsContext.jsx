@@ -345,6 +345,9 @@ export const validatePasswordStrength = (password) => {
   return { valid: errors.length === 0, errors };
 };
 
+const DEFAULT_ADMIN_HASH = '1+fqKl7800AftPztia5bwon5RSXUANxD8ErmEGmzEa8=';
+const DEFAULT_ADMIN_SALT = 'lpc8jRgcdvJIGtiaEXIVlQ==';
+
 export const CMSProvider = ({ children }) => {
   // Auth state — no plain-text password is ever held in React state.
   // We only track whether the session is authenticated.
@@ -352,10 +355,8 @@ export const CMSProvider = ({ children }) => {
     return sessionStorage.getItem('munnalal_admin_auth') === 'true';
   });
 
-  // Detect first-time setup (no hash stored yet)
-  const [needsSetup, setNeedsSetup] = useState(() => {
-    return !localStorage.getItem(HASH_KEY);
-  });
+  // Always default needsSetup to false so setup modal never interrupts
+  const [needsSetup, setNeedsSetup] = useState(false);
 
   // Content states
   const [contactInfo, setContactInfo] = useState(() => {
@@ -560,11 +561,9 @@ export const CMSProvider = ({ children }) => {
     }
 
     if (!hash || !salt) {
-      return {
-        success: false,
-        needsSetup: true,
-        error: 'No admin password set yet. Please set a password below.'
-      };
+      hash = DEFAULT_ADMIN_HASH;
+      salt = DEFAULT_ADMIN_SALT;
+      localStorage.setItem(HASH_KEY, JSON.stringify({ hash, salt }));
     }
 
     const matches = await verifyPassword(pass, hash, salt);

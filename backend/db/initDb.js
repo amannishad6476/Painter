@@ -388,6 +388,15 @@ export const initDb = async () => {
       }
     }
 
+    // Seed Admin Auth default password (Aman#2255) if missing
+    const authRes = await query(`SELECT id FROM admin_auth WHERE id = 1`);
+    if (authRes.rows.length === 0) {
+      await query(
+        `INSERT INTO admin_auth (id, hash, salt) VALUES (1, $1, $2)`,
+        ['1+fqKl7800AftPztia5bwon5RSXUANxD8ErmEGmzEa8=', 'lpc8jRgcdvJIGtiaEXIVlQ==']
+      );
+    }
+
     console.log('✅ Database Initialization & Defaults Seeding Complete!');
   } catch (err) {
     console.error('Error during DB Initialization:', err);
