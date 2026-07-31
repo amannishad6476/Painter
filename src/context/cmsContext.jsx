@@ -403,7 +403,7 @@ export const CMSProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : [];
   });
 
-  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/cms';
+  const API_BASE = import.meta.env.VITE_API_URL || '/api/cms';
 
   // Load all initial content from backend DB on component mount
   useEffect(() => {

@@ -4,11 +4,14 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const LOCAL_DB_FILE = path.join(__dirname, '../data/local_db.json');
+
+// Ensure dotenv loads backend/.env as well as root .env
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config();
 
 const { Pool } = pg;
 let pool = null;
@@ -69,6 +72,40 @@ if (databaseUrl && databaseUrl.trim() !== '') {
   console.log('👉 To connect Neon DB, add your Neon PostgreSQL connection string to backend/.env');
   useLocalFallback = true;
 }
+
+export const isLocalFallbackMode = () => useLocalFallback;
+
+export const getDbStatus = async () => {
+  if (useLocalFallback || !pool) {
+    return {
+      mode: 'local_json',
+      hasDatabaseUrl: Boolean(databaseUrl && databaseUrl.trim()),
+      message: 'Running in local JSON DB mode (no PostgreSQL connection).',
+      tables: ['singletons (local)', 'services (local)', 'gallery (local)', 'testimonials (local)', 'estimates (local)', 'leads (local)', 'admin_auth (local)']
+    };
+  }
+
+  try {
+    const res = await pool.query(
+      `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;`
+    );
+    const tables = res.rows.map(r => r.table_name);
+    return {
+      mode: 'postgres',
+      hasDatabaseUrl: true,
+      tablesCount: tables.length,
+      tables,
+      message: tables.length > 0 ? `Connected to PostgreSQL. Found ${tables.length} table(s).` : 'Connected to PostgreSQL, but no tables exist in public schema yet. Run initDb() or npm run db:init.'
+    };
+  } catch (err) {
+    return {
+      mode: 'postgres_error',
+      hasDatabaseUrl: true,
+      error: err.message,
+      message: `Failed to query tables from PostgreSQL: ${err.message}`
+    };
+  }
+};
 
 export const query = async (text, params = []) => {
   if (!useLocalFallback && pool) {

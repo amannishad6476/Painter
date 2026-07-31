@@ -1,5 +1,6 @@
 import express from 'express';
-import { query } from '../config/db.js';
+import { query, getDbStatus } from '../config/db.js';
+import { initDb } from '../db/initDb.js';
 
 const router = express.Router();
 
@@ -15,6 +16,26 @@ const parseData = (row) => {
   }
   return row.data;
 };
+
+// ─── DATABASE DIAGNOSTICS & INITIALIZATION ────────────────────────────────────
+router.get('/db-status', async (req, res) => {
+  try {
+    const status = await getDbStatus();
+    res.json({ success: true, status });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/init-db', async (req, res) => {
+  try {
+    await initDb();
+    const status = await getDbStatus();
+    res.json({ success: true, message: 'Database initialized successfully', status });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // ─── GET ALL CMS DATA ────────────────────────────────────────────────────────
 router.get('/all', async (req, res) => {
