@@ -403,7 +403,34 @@ export const CMSProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Save changes to LocalStorage & try syncing backend
+  const API_BASE = 'http://localhost:5000/api/cms';
+
+  // Load all initial content from backend DB on component mount
+  useEffect(() => {
+    const fetchCMSData = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/all`);
+        const json = await res.json();
+        if (json.success) {
+          if (json.contactInfo) setContactInfo(json.contactInfo);
+          if (json.mapInfo) setMapInfo(json.mapInfo);
+          if (json.banner) setBanner(json.banner);
+          if (json.aboutContent) setAboutContent(json.aboutContent);
+          if (Array.isArray(json.services) && json.services.length > 0) setServices(json.services);
+          if (Array.isArray(json.gallery) && json.gallery.length > 0) setGallery(json.gallery);
+          if (Array.isArray(json.testimonials) && json.testimonials.length > 0) setTestimonials(json.testimonials);
+          if (Array.isArray(json.estimates)) setEstimates(json.estimates);
+          if (Array.isArray(json.contactLeads)) setContactLeads(json.contactLeads);
+          if (json.hasAdminAuth) setNeedsSetup(false);
+        }
+      } catch (err) {
+        console.warn('Backend server disconnected or starting up. Falling back to local state:', err);
+      }
+    };
+    fetchCMSData();
+  }, []);
+
+  // Save changes to LocalStorage as offline cache
   useEffect(() => {
     localStorage.setItem('munnalal_contact_info', JSON.stringify(contactInfo));
   }, [contactInfo]);
@@ -502,8 +529,34 @@ export const CMSProvider = ({ children }) => {
     }
 
     // First-time setup: no hash stored yet
+    let hash = null;
+    let salt = null;
+
     const storedRaw = localStorage.getItem(HASH_KEY);
-    if (!storedRaw) {
+    if (storedRaw) {
+      try {
+        const parsed = JSON.parse(storedRaw);
+        hash = parsed.hash;
+        salt = parsed.salt;
+      } catch (err) {
+        console.error('Error parsing stored hash:', err);
+      }
+    }
+
+    if (!hash || !salt) {
+      try {
+        const authRes = await fetch(`${API_BASE}/auth/status`).then(r => r.json());
+        if (authRes.adminAuth) {
+          hash = authRes.adminAuth.hash;
+          salt = authRes.adminAuth.salt;
+          localStorage.setItem(HASH_KEY, JSON.stringify({ hash, salt }));
+        }
+      } catch (err) {
+        console.warn('Failed to fetch auth status from backend', err);
+      }
+    }
+
+    if (!hash || !salt) {
       return {
         success: false,
         needsSetup: true,
@@ -511,7 +564,6 @@ export const CMSProvider = ({ children }) => {
       };
     }
 
-    const { hash, salt } = JSON.parse(storedRaw);
     const matches = await verifyPassword(pass, hash, salt);
 
     if (matches) {
@@ -553,9 +605,16 @@ export const CMSProvider = ({ children }) => {
     try {
       const { hash, salt } = await hashPassword(newPass);
       localStorage.setItem(HASH_KEY, JSON.stringify({ hash, salt }));
-      // Remove legacy plain-text key if present
       localStorage.removeItem('munnalal_admin_pass');
       setNeedsSetup(false);
+
+      // Sync to backend DB
+      fetch(`${API_BASE}/auth/setup-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hash, salt })
+      }).catch(err => console.warn('Backend sync failed:', err));
+
       return { success: true };
     } catch (err) {
       return { success: false, error: 'Failed to hash password. Please try again.' };
@@ -563,8 +622,6 @@ export const CMSProvider = ({ children }) => {
   };
 
   // ─── First-time setup: hash password AND auto-authenticate in one step ───
-  // Called from the login screen when needsSetup === true. On success the
-  // admin is immediately logged in without a separate login step.
   const setupInitialPassword = async (newPass) => {
     const { valid, errors } = validatePasswordStrength(newPass || '');
     if (!valid) {
@@ -573,11 +630,20 @@ export const CMSProvider = ({ children }) => {
     try {
       const { hash, salt } = await hashPassword(newPass);
       localStorage.setItem(HASH_KEY, JSON.stringify({ hash, salt }));
-      localStorage.removeItem('munnalal_admin_pass'); // clean up legacy key
+      localStorage.removeItem('munnalal_admin_pass');
       setNeedsSetup(false);
+
       // Auto-login immediately after setup
       setIsAuthenticated(true);
       sessionStorage.setItem('munnalal_admin_auth', 'true');
+
+      // Sync to backend DB
+      fetch(`${API_BASE}/auth/setup-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hash, salt })
+      }).catch(err => console.warn('Backend sync failed:', err));
+
       return { success: true };
     } catch (err) {
       return { success: false, error: 'Failed to create password. Please try again.' };
@@ -594,8 +660,18 @@ export const CMSProvider = ({ children }) => {
     });
   };
 
-  // Update handlers
-  const updateContactInfo = (data) => setContactInfo(prev => ({ ...prev, ...data }));
+  // Update handlers with API backend sync
+  const updateContactInfo = (data) => {
+    setContactInfo(prev => {
+      const updated = { ...prev, ...data };
+      fetch(`${API_BASE}/contact`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      }).catch(err => console.warn('Backend sync contact failed:', err));
+      return updated;
+    });
+  };
   
   const updateMapInfo = (data) => {
     setMapInfo(prev => {
@@ -603,26 +679,73 @@ export const CMSProvider = ({ children }) => {
       if (data.address && data.address !== contactInfo.address) {
         setContactInfo(c => ({ ...c, address: data.address }));
       }
+      fetch(`${API_BASE}/map`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      }).catch(err => console.warn('Backend sync map failed:', err));
       return updated;
     });
   };
 
-  const updateBanner = (data) => setBanner(prev => ({ ...prev, ...data }));
-  const updateAbout = (data) => setAboutContent(prev => ({ ...prev, ...data }));
+  const updateBanner = (data) => {
+    setBanner(prev => {
+      const updated = { ...prev, ...data };
+      fetch(`${API_BASE}/banner`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      }).catch(err => console.warn('Backend sync banner failed:', err));
+      return updated;
+    });
+  };
 
-  // Service CRUD
+  const updateAbout = (data) => {
+    setAboutContent(prev => {
+      const updated = { ...prev, ...data };
+      fetch(`${API_BASE}/about`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      }).catch(err => console.warn('Backend sync about failed:', err));
+      return updated;
+    });
+  };
+
+  // Service CRUD with API sync
   const addService = (item) => {
     const newItem = { id: 's_' + Date.now(), ...item };
     setServices(prev => [newItem, ...prev]);
-  };
-  const updateService = (id, data) => {
-    setServices(prev => prev.map(s => s.id === id ? { ...s, ...data } : s));
-  };
-  const deleteService = (id) => {
-    setServices(prev => prev.filter(s => s.id !== id));
+    fetch(`${API_BASE}/services`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newItem)
+    }).catch(err => console.warn('Backend sync addService failed:', err));
   };
 
-  // Gallery CRUD (Sorted latest first)
+  const updateService = (id, data) => {
+    setServices(prev => {
+      const updated = prev.map(s => s.id === id ? { ...s, ...data } : s);
+      const target = updated.find(s => s.id === id);
+      if (target) {
+        fetch(`${API_BASE}/services/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(target)
+        }).catch(err => console.warn('Backend sync updateService failed:', err));
+      }
+      return updated;
+    });
+  };
+
+  const deleteService = (id) => {
+    setServices(prev => prev.filter(s => s.id !== id));
+    fetch(`${API_BASE}/services/${id}`, {
+      method: 'DELETE'
+    }).catch(err => console.warn('Backend sync deleteService failed:', err));
+  };
+
+  // Gallery CRUD (Sorted latest first) with API sync
   const addGalleryItem = (item) => {
     const newItem = { 
       id: 'g_' + Date.now(), 
@@ -631,41 +754,101 @@ export const CMSProvider = ({ children }) => {
       ...item 
     };
     setGallery(prev => [newItem, ...prev]);
-  };
-  const updateGalleryItem = (id, data) => {
-    setGallery(prev => prev.map(g => g.id === id ? { ...g, ...data } : g));
-  };
-  const deleteGalleryItem = (id) => {
-    setGallery(prev => prev.filter(g => g.id !== id));
+    fetch(`${API_BASE}/gallery`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newItem)
+    }).catch(err => console.warn('Backend sync addGalleryItem failed:', err));
   };
 
-  // Testimonials CRUD
+  const updateGalleryItem = (id, data) => {
+    setGallery(prev => {
+      const updated = prev.map(g => g.id === id ? { ...g, ...data } : g);
+      const target = updated.find(g => g.id === id);
+      if (target) {
+        fetch(`${API_BASE}/gallery/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(target)
+        }).catch(err => console.warn('Backend sync updateGalleryItem failed:', err));
+      }
+      return updated;
+    });
+  };
+
+  const deleteGalleryItem = (id) => {
+    setGallery(prev => prev.filter(g => g.id !== id));
+    fetch(`${API_BASE}/gallery/${id}`, {
+      method: 'DELETE'
+    }).catch(err => console.warn('Backend sync deleteGalleryItem failed:', err));
+  };
+
+  // Testimonials CRUD with API sync
   const addTestimonial = (item) => {
     const newItem = { id: 't_' + Date.now(), date: 'Just now', ...item };
     setTestimonials(prev => [newItem, ...prev]);
-  };
-  const updateTestimonial = (id, data) => {
-    setTestimonials(prev => prev.map(t => t.id === id ? { ...t, ...data } : t));
-  };
-  const deleteTestimonial = (id) => {
-    setTestimonials(prev => prev.filter(t => t.id !== id));
+    fetch(`${API_BASE}/testimonials`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newItem)
+    }).catch(err => console.warn('Backend sync addTestimonial failed:', err));
   };
 
-  // Leads
+  const updateTestimonial = (id, data) => {
+    setTestimonials(prev => {
+      const updated = prev.map(t => t.id === id ? { ...t, ...data } : t);
+      const target = updated.find(t => t.id === id);
+      if (target) {
+        fetch(`${API_BASE}/testimonials/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(target)
+        }).catch(err => console.warn('Backend sync updateTestimonial failed:', err));
+      }
+      return updated;
+    });
+  };
+
+  const deleteTestimonial = (id) => {
+    setTestimonials(prev => prev.filter(t => t.id !== id));
+    fetch(`${API_BASE}/testimonials/${id}`, {
+      method: 'DELETE'
+    }).catch(err => console.warn('Backend sync deleteTestimonial failed:', err));
+  };
+
+  // Leads with API sync
   const addEstimate = (estimate) => {
     const newEst = { id: 'est_' + Date.now(), createdAt: new Date().toISOString(), ...estimate };
     setEstimates(prev => [newEst, ...prev]);
+    fetch(`${API_BASE}/estimates`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newEst)
+    }).catch(err => console.warn('Backend sync addEstimate failed:', err));
   };
+
   const deleteEstimate = (id) => {
     setEstimates(prev => prev.filter(e => e.id !== id));
+    fetch(`${API_BASE}/estimates/${id}`, {
+      method: 'DELETE'
+    }).catch(err => console.warn('Backend sync deleteEstimate failed:', err));
   };
 
   const addContactLead = (lead) => {
     const newLead = { id: 'lead_' + Date.now(), createdAt: new Date().toISOString(), ...lead };
     setContactLeads(prev => [newLead, ...prev]);
+    fetch(`${API_BASE}/leads`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newLead)
+    }).catch(err => console.warn('Backend sync addContactLead failed:', err));
   };
+
   const deleteContactLead = (id) => {
     setContactLeads(prev => prev.filter(l => l.id !== id));
+    fetch(`${API_BASE}/leads/${id}`, {
+      method: 'DELETE'
+    }).catch(err => console.warn('Backend sync deleteContactLead failed:', err));
   };
 
   return (
