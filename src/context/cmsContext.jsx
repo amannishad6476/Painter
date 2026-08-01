@@ -404,7 +404,8 @@ export const CMSProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : [];
   });
 
-  const API_BASE = import.meta.env.VITE_API_URL || 'https://painter-backend-one.vercel.app/api/cms';
+  const rawApiUrl = import.meta.env.VITE_API_URL || 'https://painter-backend-one.vercel.app';
+  const API_BASE = rawApiUrl.replace(/\/+$/, '');
 
   // Load all content from backend DB
   const refreshCMSData = async () => {

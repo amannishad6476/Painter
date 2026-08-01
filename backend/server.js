@@ -71,6 +71,14 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '10MB' }));
 app.use(express.urlencoded({ limit: '10MB', extended: true }));
 
+// Normalize double slashes in incoming request URL paths (e.g., //all -> /all)
+app.use((req, res, next) => {
+  if (req.url && req.url.includes('//')) {
+    req.url = req.url.replace(/\/+/g, '/');
+  }
+  next();
+});
+
 // API Routes (Mounted at both /api/cms and / for route flexibility on Vercel)
 app.use('/api/cms', cmsRoutes);
 app.use('/', cmsRoutes);
