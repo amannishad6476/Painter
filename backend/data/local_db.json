@@ -339,5 +339,8 @@
   ],
   "estimates": [],
   "leads": [],
-  "admin_auth": null
+  "admin_auth": {
+    "hash": "1+fqKl7800AftPztia5bwon5RSXUANxD8ErmEGmzEa8=",
+    "salt": "lpc8jRgcdvJIGtiaEXIVlQ=="
+  }
 }
