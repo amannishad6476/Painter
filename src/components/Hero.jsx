@@ -33,7 +33,7 @@ const Hero = ({ onGetEstimateClick, onContactClick }) => {
           <div className="lg:col-span-7 space-y-6 text-left">
             
             {/* Top Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-500/20 border border-brand-400/30 backdrop-blur-md text-brand-300 font-semibold text-xs sm:text-sm tracking-wide uppercase">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-500/20 border border-brand-400/30 backdrop-blur-md text-brand-300 font-semibold text-xs sm:text-sm tracking-wide uppercase stats-count">
               <Sparkles className="w-4 h-4 text-brand-400" />
               <span>{banner.badgeText}</span>
             </div>
