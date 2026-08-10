@@ -4,12 +4,12 @@ const SEO = ({ activeTab, activeServicePage, service }) => {
   useEffect(() => {
     let title = 'Painter in Lucknow | House Painter Lucknow | Wall Painting Services - Munnalal Painter';
     let description = 'Top-rated Painter in Lucknow offering professional House Painter Lucknow, Wall Painting Services Lucknow, Interior Painter Lucknow & Exterior Painting Lucknow. Call +91 76684 15684 for free estimate!';
-    let canonical = 'https://painterlko-beige.vercel.app/';
+    let canonical = 'https://munnalalpainter.in/';
 
     if (activeServicePage && service) {
       const serviceName = service.title || 'Painting Service';
       const cleanSlug = service.slug || serviceName.toLowerCase().replace(/\s+/g, '-');
-      canonical = `https://painterlko-beige.vercel.app/#/service/${cleanSlug}`;
+      canonical = `https://munnalalpainter.in/#/service/${cleanSlug}`;
 
       if (cleanSlug.includes('interior')) {
         title = `Interior Painter Lucknow | Wall Painting Services Lucknow - Munnalal Painter`;
