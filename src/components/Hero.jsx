@@ -119,7 +119,7 @@ const Hero = ({ onGetEstimateClick, onContactClick }) => {
               <div className="grid grid-cols-2 gap-4">
                 {(banner.stats || []).map((stat, i) => (
                   <div key={i} className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/50">
-                    <div className="text-3xl font-black text-brand-400 font-outfit">{stat.value}</div>
+                    <div className="text-3xl font-black text-brand-400 font-outfit stats-count">{stat.value}</div>
                     <div className="text-xs text-slate-400 mt-1 font-medium">{stat.label}</div>
                   </div>
                 ))}
