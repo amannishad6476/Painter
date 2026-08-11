@@ -388,7 +388,7 @@ export const initDb = async () => {
       }
     }
 
-    // Seed Admin Auth default password (Aman#2255) if missing
+    // Seed Admin Auth default password (aradhya#2255) if missing
     const authRes = await query(`SELECT id FROM admin_auth WHERE id = 1`);
     if (authRes.rows.length === 0) {
       await query(
