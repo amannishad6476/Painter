@@ -348,64 +348,135 @@ export const validatePasswordStrength = (password) => {
 const DEFAULT_ADMIN_HASH = '1+fqKl7800AftPztia5bwon5RSXUANxD8ErmEGmzEa8=';
 const DEFAULT_ADMIN_SALT = 'lpc8jRgcdvJIGtiaEXIVlQ==';
 
+// Safely purge legacy gallery key on module load before React renders
+try {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    window.localStorage.removeItem('munnalal_gallery');
+  }
+} catch (e) {}
+
 export const CMSProvider = ({ children }) => {
   // Auth state — no plain-text password is ever held in React state.
   // We only track whether the session is authenticated.
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return sessionStorage.getItem('munnalal_admin_auth') === 'true';
+    try {
+      return sessionStorage.getItem('munnalal_admin_auth') === 'true';
+    } catch {
+      return false;
+    }
   });
 
   // Always default needsSetup to false so setup modal never interrupts
   const [needsSetup, setNeedsSetup] = useState(false);
 
+  // Helper to safely write to localStorage without crashing React on QuotaExceededError
+  const safeLocalStorageSet = (key, val) => {
+    // Gallery must NEVER be written to localStorage
+    if (key === 'munnalal_gallery') {
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.removeItem('munnalal_gallery');
+        }
+      } catch (e) {}
+      return;
+    }
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(key, val);
+      }
+    } catch (err) {
+      console.warn(`LocalStorage write skipped for "${key}":`, err);
+    }
+  };
+
   // Content states
   const [contactInfo, setContactInfo] = useState(() => {
-    const saved = localStorage.getItem('munnalal_contact_info');
-    return saved ? JSON.parse(saved) : defaultContactInfo;
+    try {
+      const saved = localStorage.getItem('munnalal_contact_info');
+      return saved ? JSON.parse(saved) : defaultContactInfo;
+    } catch {
+      return defaultContactInfo;
+    }
   });
 
   const [mapInfo, setMapInfo] = useState(() => {
-    const saved = localStorage.getItem('munnalal_map_info');
-    return saved ? JSON.parse(saved) : defaultMapInfo;
+    try {
+      const saved = localStorage.getItem('munnalal_map_info');
+      return saved ? JSON.parse(saved) : defaultMapInfo;
+    } catch {
+      return defaultMapInfo;
+    }
   });
 
   const [banner, setBanner] = useState(() => {
-    const saved = localStorage.getItem('munnalal_banner');
-    return saved ? JSON.parse(saved) : defaultBanner;
+    try {
+      const saved = localStorage.getItem('munnalal_banner');
+      return saved ? JSON.parse(saved) : defaultBanner;
+    } catch {
+      return defaultBanner;
+    }
   });
 
   const [aboutContent, setAboutContent] = useState(() => {
-    const saved = localStorage.getItem('munnalal_about');
-    return saved ? JSON.parse(saved) : defaultAbout;
+    try {
+      const saved = localStorage.getItem('munnalal_about');
+      return saved ? JSON.parse(saved) : defaultAbout;
+    } catch {
+      return defaultAbout;
+    }
   });
 
   const [services, setServices] = useState(() => {
-    const saved = localStorage.getItem('munnalal_services');
-    return saved ? JSON.parse(saved) : defaultServices;
+    try {
+      const saved = localStorage.getItem('munnalal_services');
+      return saved ? JSON.parse(saved) : defaultServices;
+    } catch {
+      return defaultServices;
+    }
   });
 
-  const [gallery, setGallery] = useState(() => {
-    const saved = localStorage.getItem('munnalal_gallery');
-    return saved ? JSON.parse(saved) : defaultGallery;
-  });
+  // Gallery source of truth is exclusively the backend DB.
+  // We initialize with defaultGallery and NEVER read or write to browser localStorage.
+  const [gallery, setGallery] = useState(defaultGallery);
 
   const [testimonials, setTestimonials] = useState(() => {
-    const saved = localStorage.getItem('munnalal_testimonials');
-    return saved ? JSON.parse(saved) : defaultTestimonials;
+    try {
+      const saved = localStorage.getItem('munnalal_testimonials');
+      return saved ? JSON.parse(saved) : defaultTestimonials;
+    } catch {
+      return defaultTestimonials;
+    }
   });
 
   const [estimates, setEstimates] = useState(() => {
-    const saved = localStorage.getItem('munnalal_estimates');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('munnalal_estimates');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
   });
 
   const [contactLeads, setContactLeads] = useState(() => {
-    const saved = localStorage.getItem('munnalal_leads');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('munnalal_leads');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
   });
 
   const rawApiUrl = import.meta.env.VITE_API_URL || 'https://painter-backend-one.vercel.app';
   const API_BASE = rawApiUrl.replace(/\/+$/, '');
+
+  // Automatically purge any stale legacy gallery data from browser localStorage on startup
+  useEffect(() => {
+    try {
+      localStorage.removeItem('munnalal_gallery');
+    } catch (err) {
+      // Ignored
+    }
+  }, []);
 
   // Load all content from backend DB
   const refreshCMSData = async () => {
@@ -435,41 +506,39 @@ export const CMSProvider = ({ children }) => {
     refreshCMSData();
   }, []);
 
-  // Save changes to LocalStorage as offline cache
+  // Save lightweight text metadata to LocalStorage as offline cache (gallery is excluded)
   useEffect(() => {
-    localStorage.setItem('munnalal_contact_info', JSON.stringify(contactInfo));
+    safeLocalStorageSet('munnalal_contact_info', JSON.stringify(contactInfo));
   }, [contactInfo]);
 
   useEffect(() => {
-    localStorage.setItem('munnalal_map_info', JSON.stringify(mapInfo));
+    safeLocalStorageSet('munnalal_map_info', JSON.stringify(mapInfo));
   }, [mapInfo]);
 
   useEffect(() => {
-    localStorage.setItem('munnalal_banner', JSON.stringify(banner));
+    safeLocalStorageSet('munnalal_banner', JSON.stringify(banner));
   }, [banner]);
 
   useEffect(() => {
-    localStorage.setItem('munnalal_about', JSON.stringify(aboutContent));
+    safeLocalStorageSet('munnalal_about', JSON.stringify(aboutContent));
   }, [aboutContent]);
 
   useEffect(() => {
-    localStorage.setItem('munnalal_services', JSON.stringify(services));
+    safeLocalStorageSet('munnalal_services', JSON.stringify(services));
   }, [services]);
 
-  useEffect(() => {
-    localStorage.setItem('munnalal_gallery', JSON.stringify(gallery));
-  }, [gallery]);
+  // NOTE: munnalal_gallery is intentionally NEVER written to localStorage to permanently prevent QuotaExceededError
 
   useEffect(() => {
-    localStorage.setItem('munnalal_testimonials', JSON.stringify(testimonials));
+    safeLocalStorageSet('munnalal_testimonials', JSON.stringify(testimonials));
   }, [testimonials]);
 
   useEffect(() => {
-    localStorage.setItem('munnalal_estimates', JSON.stringify(estimates));
+    safeLocalStorageSet('munnalal_estimates', JSON.stringify(estimates));
   }, [estimates]);
 
   useEffect(() => {
-    localStorage.setItem('munnalal_leads', JSON.stringify(contactLeads));
+    safeLocalStorageSet('munnalal_leads', JSON.stringify(contactLeads));
   }, [contactLeads]);
 
   // ─── Rate-limit helpers ──────────────────────────────────────────────────
@@ -554,7 +623,7 @@ export const CMSProvider = ({ children }) => {
         if (authRes.adminAuth) {
           hash = authRes.adminAuth.hash;
           salt = authRes.adminAuth.salt;
-          localStorage.setItem(HASH_KEY, JSON.stringify({ hash, salt }));
+          safeLocalStorageSet(HASH_KEY, JSON.stringify({ hash, salt }));
         }
       } catch (err) {
         console.warn('Failed to fetch auth status from backend', err);
@@ -564,7 +633,7 @@ export const CMSProvider = ({ children }) => {
     if (!hash || !salt) {
       hash = DEFAULT_ADMIN_HASH;
       salt = DEFAULT_ADMIN_SALT;
-      localStorage.setItem(HASH_KEY, JSON.stringify({ hash, salt }));
+      safeLocalStorageSet(HASH_KEY, JSON.stringify({ hash, salt }));
     }
 
     const matches = await verifyPassword(pass, hash, salt);
@@ -572,7 +641,27 @@ export const CMSProvider = ({ children }) => {
     if (matches) {
       resetRateLimit();
       setIsAuthenticated(true);
-      sessionStorage.setItem('munnalal_admin_auth', 'true');
+      try {
+        sessionStorage.setItem('munnalal_admin_auth', 'true');
+      } catch (e) {}
+
+      // Request signed session token from backend for authenticated admin actions (media upload, etc.)
+      try {
+        const loginRes = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pass })
+        });
+        const loginJson = await loginRes.json();
+        if (loginJson.success && loginJson.token) {
+          try {
+            sessionStorage.setItem('munnalal_admin_token', loginJson.token);
+          } catch (e) {}
+        }
+      } catch (err) {
+        console.warn('Backend login token fetch deferred:', err);
+      }
+
       return { success: true };
     }
 
@@ -596,7 +685,10 @@ export const CMSProvider = ({ children }) => {
 
   const logout = () => {
     setIsAuthenticated(false);
-    sessionStorage.removeItem('munnalal_admin_auth');
+    try {
+      sessionStorage.removeItem('munnalal_admin_auth');
+      sessionStorage.removeItem('munnalal_admin_token');
+    } catch (e) {}
   };
 
   // ─── Change passcode (async, validates strength + hashes) ───────────────
@@ -607,16 +699,27 @@ export const CMSProvider = ({ children }) => {
     }
     try {
       const { hash, salt } = await hashPassword(newPass);
-      localStorage.setItem(HASH_KEY, JSON.stringify({ hash, salt }));
-      localStorage.removeItem('munnalal_admin_pass');
+      safeLocalStorageSet(HASH_KEY, JSON.stringify({ hash, salt }));
+      try {
+        localStorage.removeItem('munnalal_admin_pass');
+      } catch (e) {}
       setNeedsSetup(false);
 
-      // Sync to backend DB
+      // Sync to backend DB and receive new token
       fetch(`${API_BASE}/auth/setup-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ hash, salt })
-      }).catch(err => console.warn('Backend sync failed:', err));
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success && data.token) {
+            try {
+              sessionStorage.setItem('munnalal_admin_token', data.token);
+            } catch (e) {}
+          }
+        })
+        .catch(err => console.warn('Backend sync failed:', err));
 
       return { success: true };
     } catch (err) {
@@ -632,20 +735,33 @@ export const CMSProvider = ({ children }) => {
     }
     try {
       const { hash, salt } = await hashPassword(newPass);
-      localStorage.setItem(HASH_KEY, JSON.stringify({ hash, salt }));
-      localStorage.removeItem('munnalal_admin_pass');
+      safeLocalStorageSet(HASH_KEY, JSON.stringify({ hash, salt }));
+      try {
+        localStorage.removeItem('munnalal_admin_pass');
+      } catch (e) {}
       setNeedsSetup(false);
 
       // Auto-login immediately after setup
       setIsAuthenticated(true);
-      sessionStorage.setItem('munnalal_admin_auth', 'true');
+      try {
+        sessionStorage.setItem('munnalal_admin_auth', 'true');
+      } catch (e) {}
 
-      // Sync to backend DB
+      // Sync to backend DB and receive admin token
       fetch(`${API_BASE}/auth/setup-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ hash, salt })
-      }).catch(err => console.warn('Backend sync failed:', err));
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success && data.token) {
+            try {
+              sessionStorage.setItem('munnalal_admin_token', data.token);
+            } catch (e) {}
+          }
+        })
+        .catch(err => console.warn('Backend sync failed:', err));
 
       return { success: true };
     } catch (err) {
@@ -653,14 +769,85 @@ export const CMSProvider = ({ children }) => {
     }
   };
 
-  // Convert File object to Base64 String
-  const convertFileToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = (error) => reject(error);
+  // Base64 file conversion is permanently disabled to prevent QuotaExceededError
+  const convertFileToBase64 = () => {
+    return Promise.reject(
+      new Error('Base64 media conversion is disabled. All images and videos must use Cloudinary storage via uploadMedia.')
+    );
+  };
+
+  // Upload media file to persistent storage backend (Cloudinary CDN), returning public URL
+  const uploadMedia = async (file) => {
+    if (!file) throw new Error('No file provided for upload.');
+
+    const isVideo = file.type.startsWith('video/');
+    const maxBytes = isVideo ? 30 * 1024 * 1024 : 15 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      throw new Error(`File is too large (${(file.size / (1024 * 1024)).toFixed(1)}MB). Max allowed: ${isVideo ? '30MB' : '15MB'}.`);
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const token = sessionStorage.getItem('munnalal_admin_token');
+    const headers = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(`${API_BASE}/upload`, {
+      method: 'POST',
+      headers,
+      body: formData
     });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => null);
+      if (res.status === 401) {
+        throw new Error('Admin session expired or unauthorized. Please re-login to upload media.');
+      }
+      throw new Error(errData?.error || `Upload failed with HTTP ${res.status}`);
+    }
+
+    const json = await res.json();
+    if (!json.success || !json.url) {
+      throw new Error(json.error || 'Server did not return a valid media URL.');
+    }
+
+    return json;
+  };
+
+  // Dedicated upload for public customer review photos (strictly 1MB max, image only)
+  const uploadReviewPhoto = async (file) => {
+    if (!file) throw new Error('No photo provided for review.');
+
+    if (!file.type.startsWith('image/')) {
+      throw new Error('Only image files (JPG, PNG, WEBP) are allowed for customer reviews.');
+    }
+
+    if (file.size > 1024 * 1024) {
+      throw new Error(`Review photo is ${(file.size / (1024 * 1024)).toFixed(1)}MB. Maximum allowed is 1MB.`);
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await fetch(`${API_BASE}/review-upload`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => null);
+      throw new Error(errData?.error || `Photo upload failed with HTTP ${res.status}`);
+    }
+
+    const json = await res.json();
+    if (!json.success || !json.url) {
+      throw new Error(json.error || 'Server did not return a valid photo URL.');
+    }
+
+    return json;
   };
 
   // Update handlers with API backend sync
@@ -749,7 +936,7 @@ export const CMSProvider = ({ children }) => {
   };
 
   // Gallery CRUD (Sorted latest first) with API sync
-  const addGalleryItem = (item) => {
+  const addGalleryItem = async (item) => {
     const newItem = { 
       id: 'g_' + Date.now(), 
       createdAt: Date.now(),
@@ -757,14 +944,20 @@ export const CMSProvider = ({ children }) => {
       ...item 
     };
     setGallery(prev => [newItem, ...prev]);
-    fetch(`${API_BASE}/gallery`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newItem)
-    }).catch(err => console.warn('Backend sync addGalleryItem failed:', err));
+    try {
+      const res = await fetch(`${API_BASE}/gallery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newItem)
+      });
+      return await res.json();
+    } catch (err) {
+      console.warn('Backend sync addGalleryItem failed:', err);
+      return { success: false, error: err.message };
+    }
   };
 
-  const updateGalleryItem = (id, data) => {
+  const updateGalleryItem = async (id, data) => {
     setGallery(prev => {
       const updated = prev.map(g => g.id === id ? { ...g, ...data } : g);
       const target = updated.find(g => g.id === id);
@@ -779,11 +972,17 @@ export const CMSProvider = ({ children }) => {
     });
   };
 
-  const deleteGalleryItem = (id) => {
+  const deleteGalleryItem = async (id) => {
     setGallery(prev => prev.filter(g => g.id !== id));
-    fetch(`${API_BASE}/gallery/${id}`, {
-      method: 'DELETE'
-    }).catch(err => console.warn('Backend sync deleteGalleryItem failed:', err));
+    try {
+      const res = await fetch(`${API_BASE}/gallery/${id}`, {
+        method: 'DELETE'
+      });
+      return await res.json();
+    } catch (err) {
+      console.warn('Backend sync deleteGalleryItem failed:', err);
+      return { success: false, error: err.message };
+    }
   };
 
   // Testimonials CRUD with API sync
@@ -897,6 +1096,8 @@ export const CMSProvider = ({ children }) => {
       setupInitialPassword,
       validatePasswordStrength,
       convertFileToBase64,
+      uploadMedia,
+      uploadReviewPhoto,
       contactInfo,
       updateContactInfo,
       mapInfo,

@@ -20,7 +20,7 @@ const LUCKNOW_AREAS = [
 ];
 
 const ReviewModal = ({ isOpen, onClose }) => {
-  const { addTestimonial, convertFileToBase64 } = useCMS();
+  const { addTestimonial, uploadReviewPhoto } = useCMS();
 
   const [form, setForm] = useState({
     name: '',
@@ -68,8 +68,8 @@ const ReviewModal = ({ isOpen, onClose }) => {
   const handlePhotoChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 3 * 1024 * 1024) {
-      setErrors(prev => ({ ...prev, photo: 'Photo must be under 3MB.' }));
+    if (file.size > 1024 * 1024) {
+      setErrors(prev => ({ ...prev, photo: 'Photo must be under 1MB.' }));
       return;
     }
     setErrors(prev => ({ ...prev, photo: null }));
@@ -100,7 +100,12 @@ const ReviewModal = ({ isOpen, onClose }) => {
     try {
       let avatarData = null;
       if (form.photo) {
-        avatarData = await convertFileToBase64(form.photo);
+        try {
+          const uploadRes = await uploadReviewPhoto(form.photo);
+          avatarData = uploadRes.url;
+        } catch (uploadErr) {
+          console.warn('Review avatar upload fallback:', uploadErr);
+        }
       }
       await addTestimonial({
         name: form.name.trim(),
@@ -334,7 +339,7 @@ const ReviewModal = ({ isOpen, onClose }) => {
                   id="review-photo-input"
                 />
               </div>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5">JPG, PNG, WebP — max 3MB</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5">JPG, PNG, WebP — max 1MB</p>
               {errors.photo && <p className="text-xs text-red-500 mt-1">{errors.photo}</p>}
             </div>
 

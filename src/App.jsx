@@ -51,7 +51,14 @@ function MainApp() {
 
   // Check system dark mode preference or localStorage on mount
   useEffect(() => {
-    const savedTheme = localStorage.getItem('theme');
+    let savedTheme = null;
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        savedTheme = localStorage.getItem('theme');
+      }
+    } catch (e) {
+      // Storage unavailable or blocked
+    }
     if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
       setIsDarkMode(true);
       document.documentElement.classList.add('dark');
@@ -64,11 +71,19 @@ function MainApp() {
   const toggleDarkMode = () => {
     if (isDarkMode) {
       document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          localStorage.setItem('theme', 'light');
+        }
+      } catch (e) {}
       setIsDarkMode(false);
     } else {
       document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          localStorage.setItem('theme', 'dark');
+        }
+      } catch (e) {}
       setIsDarkMode(true);
     }
   };

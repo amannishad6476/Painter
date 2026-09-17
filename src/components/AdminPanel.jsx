@@ -18,7 +18,7 @@ const AdminPanel = ({ onBack }) => {
     setupInitialPassword,
     getRateLimitStatus,
     validatePasswordStrength,
-    convertFileToBase64,
+    uploadMedia,
     contactInfo,
     updateContactInfo,
     mapInfo,
@@ -186,6 +186,33 @@ const AdminPanel = ({ onBack }) => {
     }
   };
 
+  // Media upload state & validation
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [uploadProgressMsg, setUploadProgressMsg] = useState('');
+
+  const validateMediaFile = (file, isVideo = false) => {
+    if (!file) throw new Error('No file selected.');
+
+    const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'];
+    const allowedVideoTypes = ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'];
+
+    if (isVideo) {
+      if (!allowedVideoTypes.includes(file.type)) {
+        throw new Error('Invalid video format. Supported: MP4, WEBM, OGG, MOV.');
+      }
+      if (file.size > 30 * 1024 * 1024) {
+        throw new Error(`Video exceeds maximum size of 30MB (${(file.size / (1024 * 1024)).toFixed(1)}MB selected).`);
+      }
+    } else {
+      if (!allowedImageTypes.includes(file.type)) {
+        throw new Error('Invalid image format. Supported: JPG, PNG, WEBP, GIF, SVG.');
+      }
+      if (file.size > 15 * 1024 * 1024) {
+        throw new Error(`Image exceeds maximum size of 15MB (${(file.size / (1024 * 1024)).toFixed(1)}MB selected).`);
+      }
+    }
+  };
+
   // --- TAB 1: BANNER STATE ---
   const [bannerForm, setBannerForm] = useState(banner);
   const handleBannerSave = (e) => {
@@ -195,14 +222,21 @@ const AdminPanel = ({ onBack }) => {
   };
   const handleBannerImageUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      try {
-        const base64 = await convertFileToBase64(file);
-        setBannerForm(prev => ({ ...prev, bgImage: base64 }));
-        showToast('Banner background image uploaded!');
-      } catch (err) {
-        console.error(err);
-      }
+    if (!file) return;
+    try {
+      validateMediaFile(file, false);
+      setIsUploadingMedia(true);
+      showToast('Uploading banner photo...');
+      const res = await uploadMedia(file);
+      setBannerForm(prev => ({ ...prev, bgImage: res.url }));
+      showToast('Banner background image uploaded!');
+    } catch (err) {
+      console.error('Banner upload error:', err);
+      showToast(err.message || 'Failed to upload banner photo', 'error');
+      alert(`Upload notice: ${err.message}`);
+    } finally {
+      setIsUploadingMedia(false);
+      e.target.value = '';
     }
   };
 
@@ -258,9 +292,21 @@ const AdminPanel = ({ onBack }) => {
 
   const handleServiceImageUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const base64 = await convertFileToBase64(file);
-      setServiceForm(prev => ({ ...prev, image: base64 }));
+    if (!file) return;
+    try {
+      validateMediaFile(file, false);
+      setIsUploadingMedia(true);
+      showToast('Uploading service image...');
+      const res = await uploadMedia(file);
+      setServiceForm(prev => ({ ...prev, image: res.url }));
+      showToast('Service image uploaded!');
+    } catch (err) {
+      console.error('Service image upload error:', err);
+      showToast(err.message || 'Failed to upload image', 'error');
+      alert(`Upload notice: ${err.message}`);
+    } finally {
+      setIsUploadingMedia(false);
+      e.target.value = '';
     }
   };
 
@@ -291,6 +337,10 @@ const AdminPanel = ({ onBack }) => {
 
   const handleGalleryFormSubmit = (e) => {
     e.preventDefault();
+    if (isUploadingMedia) {
+      alert('Please wait for media upload to finish before saving.');
+      return;
+    }
     if (!galleryForm.title) {
       alert('Please provide a project title.');
       return;
@@ -333,28 +383,67 @@ const AdminPanel = ({ onBack }) => {
 
   const handleGalleryAfterUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const base64 = await convertFileToBase64(file);
-      setGalleryForm(prev => ({ ...prev, afterImage: base64 }));
-      showToast('Photo uploaded!');
+    if (!file) return;
+    try {
+      validateMediaFile(file, false);
+      setIsUploadingMedia(true);
+      setUploadProgressMsg('Uploading project photo...');
+      showToast('Uploading photo to storage...');
+      const res = await uploadMedia(file);
+      setGalleryForm(prev => ({ ...prev, afterImage: res.url }));
+      showToast('Photo uploaded successfully!');
+    } catch (err) {
+      console.error('Gallery image upload error:', err);
+      showToast(err.message || 'Failed to upload photo', 'error');
+      alert(`Upload notice: ${err.message}`);
+    } finally {
+      setIsUploadingMedia(false);
+      setUploadProgressMsg('');
+      e.target.value = '';
     }
   };
 
   const handleGalleryBeforeUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const base64 = await convertFileToBase64(file);
-      setGalleryForm(prev => ({ ...prev, beforeImage: base64 }));
-      showToast('Before photo uploaded!');
+    if (!file) return;
+    try {
+      validateMediaFile(file, false);
+      setIsUploadingMedia(true);
+      setUploadProgressMsg('Uploading before photo...');
+      showToast('Uploading before photo...');
+      const res = await uploadMedia(file);
+      setGalleryForm(prev => ({ ...prev, beforeImage: res.url }));
+      showToast('Before photo uploaded successfully!');
+    } catch (err) {
+      console.error('Gallery before image upload error:', err);
+      showToast(err.message || 'Failed to upload before photo', 'error');
+      alert(`Upload notice: ${err.message}`);
+    } finally {
+      setIsUploadingMedia(false);
+      setUploadProgressMsg('');
+      e.target.value = '';
     }
   };
 
   const handleGalleryVideoUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const base64 = await convertFileToBase64(file);
-      setGalleryForm(prev => ({ ...prev, videoUrl: base64, mediaType: 'video' }));
+    if (!file) return;
+    try {
+      validateMediaFile(file, true);
+      setIsUploadingMedia(true);
+      setUploadProgressMsg('Uploading video to storage (may take a moment)...');
+      showToast('Uploading video to persistent storage...');
+      const res = await uploadMedia(file);
+      setGalleryForm(prev => ({ ...prev, videoUrl: res.url, mediaType: 'video' }));
       showToast('Video uploaded successfully!');
+    } catch (err) {
+      console.error('Gallery video upload error:', err);
+      showToast(err.message || 'Failed to upload video', 'error');
+      alert(`Upload notice: ${err.message}`);
+    } finally {
+      setIsUploadingMedia(false);
+      setUploadProgressMsg('');
+      e.target.value = '';
     }
   };
 
@@ -367,9 +456,21 @@ const AdminPanel = ({ onBack }) => {
   };
   const handleAboutImageUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const base64 = await convertFileToBase64(file);
-      setAboutForm(prev => ({ ...prev, featureImage: base64 }));
+    if (!file) return;
+    try {
+      validateMediaFile(file, false);
+      setIsUploadingMedia(true);
+      showToast('Uploading about photo...');
+      const res = await uploadMedia(file);
+      setAboutForm(prev => ({ ...prev, featureImage: res.url }));
+      showToast('About photo uploaded!');
+    } catch (err) {
+      console.error('About image upload error:', err);
+      showToast(err.message || 'Failed to upload photo', 'error');
+      alert(`Upload notice: ${err.message}`);
+    } finally {
+      setIsUploadingMedia(false);
+      e.target.value = '';
     }
   };
 
@@ -418,9 +519,21 @@ const AdminPanel = ({ onBack }) => {
 
   const handleAvatarUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const base64 = await convertFileToBase64(file);
-      setTestimonialForm(prev => ({ ...prev, avatar: base64 }));
+    if (!file) return;
+    try {
+      validateMediaFile(file, false);
+      setIsUploadingMedia(true);
+      showToast('Uploading avatar...');
+      const res = await uploadMedia(file);
+      setTestimonialForm(prev => ({ ...prev, avatar: res.url }));
+      showToast('Avatar uploaded!');
+    } catch (err) {
+      console.error('Avatar upload error:', err);
+      showToast(err.message || 'Failed to upload avatar', 'error');
+      alert(`Upload notice: ${err.message}`);
+    } finally {
+      setIsUploadingMedia(false);
+      e.target.value = '';
     }
   };
 
@@ -1233,15 +1346,24 @@ const AdminPanel = ({ onBack }) => {
                         )}
                       </div>
                     )}
-
                   </div>
+
+                  {isUploadingMedia && (
+                    <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-xs flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-amber-600 border-t-transparent rounded-full animate-spin"></div>
+                      <span>{uploadProgressMsg || 'Uploading media to persistent storage, please wait...'}</span>
+                    </div>
+                  )}
 
                   <button
                     type="submit"
-                    className="px-6 py-3.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-sm shadow-md flex items-center gap-2"
+                    disabled={isUploadingMedia}
+                    className={`px-6 py-3.5 rounded-xl text-white font-bold text-sm shadow-md flex items-center gap-2 ${
+                      isUploadingMedia ? 'bg-slate-400 cursor-not-allowed' : 'bg-brand-500 hover:bg-brand-600'
+                    }`}
                   >
                     <Plus className="w-4 h-4" />
-                    <span>{editingGalleryId ? 'Update Media Item' : 'Save & Publish Item Live'}</span>
+                    <span>{isUploadingMedia ? (uploadProgressMsg || 'Uploading media...') : editingGalleryId ? 'Update Media Item' : 'Save & Publish Item Live'}</span>
                   </button>
                 </form>
 

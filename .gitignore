@@ -6,6 +6,7 @@ node_modules/
 dist/
 dist-ssr/
 build/
+backend/uploads/
 
 # Environment variables
 .env

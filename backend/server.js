@@ -1,10 +1,16 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { initDb } from './db/initDb.js';
 import cmsRoutes from './routes/cmsRoutes.js';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -67,9 +73,20 @@ app.use((req, res, next) => {
   next();
 });
 
-// Parse JSON bodies (up to 10MB to accommodate base64 image uploads)
-app.use(express.json({ limit: '10MB' }));
-app.use(express.urlencoded({ limit: '10MB', extended: true }));
+// Parse JSON bodies (up to 25MB to accommodate high-res uploads)
+app.use(express.json({ limit: '25MB' }));
+app.use(express.urlencoded({ limit: '25MB', extended: true }));
+
+// Serve uploads directory statically if it exists
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  try {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  } catch (e) {
+    // Ignore in read-only environments
+  }
+}
+app.use('/uploads', express.static(uploadsDir));
 
 // Normalize double slashes in incoming request URL paths (e.g., //all -> /all)
 app.use((req, res, next) => {

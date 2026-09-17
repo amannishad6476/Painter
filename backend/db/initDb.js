@@ -343,6 +343,31 @@ export const initDb = async () => {
       )
     `);
 
+    // Media files table for persistent uploads (Cloudinary URLs + metadata, zero Base64)
+    await query(`
+      CREATE TABLE IF NOT EXISTS media_files (
+        id VARCHAR(100) PRIMARY KEY,
+        filename VARCHAR(255) NOT NULL,
+        mime_type VARCHAR(100) NOT NULL,
+        size INT NOT NULL,
+        url TEXT,
+        public_id VARCHAR(255),
+        resource_type VARCHAR(50) DEFAULT 'image',
+        data TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Schema migration: safely alter existing media_files table if already created
+    try {
+      await query(`ALTER TABLE media_files ADD COLUMN IF NOT EXISTS url TEXT`);
+      await query(`ALTER TABLE media_files ADD COLUMN IF NOT EXISTS public_id VARCHAR(255)`);
+      await query(`ALTER TABLE media_files ADD COLUMN IF NOT EXISTS resource_type VARCHAR(50) DEFAULT 'image'`);
+      await query(`ALTER TABLE media_files ALTER COLUMN data DROP NOT NULL`);
+    } catch (alterErr) {
+      // Ignored in local fallback mode or if already applied
+    }
+
     // Seed Singletons if missing
     const contactRes = await query(`SELECT data FROM singletons WHERE key = 'contact_info'`);
     if (contactRes.rows.length === 0) {

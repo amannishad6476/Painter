@@ -25,6 +25,7 @@ let localData = {
   testimonials: [],
   estimates: [],
   leads: [],
+  media_files: [],
   admin_auth: null
 };
 
@@ -81,7 +82,7 @@ export const getDbStatus = async () => {
       mode: 'local_json',
       hasDatabaseUrl: Boolean(databaseUrl && databaseUrl.trim()),
       message: 'Running in local JSON DB mode (no PostgreSQL connection).',
-      tables: ['singletons (local)', 'services (local)', 'gallery (local)', 'testimonials (local)', 'estimates (local)', 'leads (local)', 'admin_auth (local)']
+      tables: ['singletons (local)', 'services (local)', 'gallery (local)', 'testimonials (local)', 'estimates (local)', 'leads (local)', 'media_files (local)', 'admin_auth (local)']
     };
   }
 
@@ -154,6 +155,72 @@ const handleLocalQuery = (text, params) => {
     localData.admin_auth = { hash: params[0], salt: params[1] };
     saveLocalData();
     return { rows: [localData.admin_auth], rowCount: 1 };
+  }
+
+  // Media Files (Images / Videos) handling for local fallback
+  if (cleanSql.includes('media_files')) {
+    if (cleanSql.toUpperCase().startsWith('SELECT')) {
+      if (cleanSql.includes('WHERE id =')) {
+        const id = params[0];
+        const match = (localData.media_files || []).find(m => m.id === id);
+        return { rows: match ? [match] : [] };
+      }
+      return { rows: localData.media_files || [] };
+    }
+    if (cleanSql.toUpperCase().startsWith('INSERT')) {
+      let mediaItem;
+      if (params.length >= 7) {
+        mediaItem = {
+          id: params[0],
+          filename: params[1],
+          mime_type: params[2],
+          size: params[3],
+          url: params[4] || null,
+          public_id: params[5] || null,
+          resource_type: params[6] || 'image',
+          data: params[7] || null,
+          created_at: new Date().toISOString()
+        };
+      } else {
+        mediaItem = {
+          id: params[0],
+          filename: params[1],
+          mime_type: params[2],
+          size: params[3],
+          url: null,
+          public_id: null,
+          resource_type: 'image',
+          data: params[4] || null,
+          created_at: new Date().toISOString()
+        };
+      }
+      localData.media_files = [mediaItem, ...(localData.media_files || [])];
+      saveLocalData();
+      return { rows: [mediaItem], rowCount: 1 };
+    }
+    if (cleanSql.toUpperCase().startsWith('UPDATE')) {
+      if (cleanSql.includes('WHERE id =')) {
+        const id = params[params.length - 1];
+        const match = (localData.media_files || []).find(m => m.id === id);
+        if (match) {
+          if (cleanSql.includes('url =') && cleanSql.includes('public_id =')) {
+            match.url = params[0];
+            match.public_id = params[1];
+            match.resource_type = params[2];
+            match.data = null;
+          }
+          saveLocalData();
+          return { rows: [match], rowCount: 1 };
+        }
+      }
+      return { rows: [], rowCount: 0 };
+    }
+    if (cleanSql.toUpperCase().startsWith('DELETE')) {
+      const id = params[0];
+      localData.media_files = (localData.media_files || []).filter(m => m.id !== id);
+      saveLocalData();
+      return { rows: [], rowCount: 1 };
+    }
   }
 
   // Collection CRUD (services, gallery, testimonials, estimates, leads)
