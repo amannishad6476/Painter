@@ -333,6 +333,16 @@ export const initDb = async () => {
       )
     `);
 
+
+    // Festival Offers table
+    await query(`
+      CREATE TABLE IF NOT EXISTS festival_offers (
+        id VARCHAR(100) PRIMARY KEY,
+        data JSONB NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Admin Auth table
     await query(`
       CREATE TABLE IF NOT EXISTS admin_auth (

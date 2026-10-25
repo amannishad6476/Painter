@@ -25,6 +25,7 @@ let localData = {
   testimonials: [],
   estimates: [],
   leads: [],
+  festival_offers: [],
   media_files: [],
   admin_auth: null
 };
@@ -82,7 +83,7 @@ export const getDbStatus = async () => {
       mode: 'local_json',
       hasDatabaseUrl: Boolean(databaseUrl && databaseUrl.trim()),
       message: 'Running in local JSON DB mode (no PostgreSQL connection).',
-      tables: ['singletons (local)', 'services (local)', 'gallery (local)', 'testimonials (local)', 'estimates (local)', 'leads (local)', 'media_files (local)', 'admin_auth (local)']
+      tables: ['singletons (local)', 'services (local)', 'gallery (local)', 'testimonials (local)', 'estimates (local)', 'leads (local)', 'festival_offers (local)', 'media_files (local)', 'admin_auth (local)']
     };
   }
 
@@ -224,16 +225,19 @@ const handleLocalQuery = (text, params) => {
   }
 
   // Collection CRUD (services, gallery, testimonials, estimates, leads)
-  const collectionMatch = cleanSql.match(/FROM\s+(services|gallery|testimonials|estimates|leads)/i) ||
-                          cleanSql.match(/INTO\s+(services|gallery|testimonials|estimates|leads)/i) ||
-                          cleanSql.match(/UPDATE\s+(services|gallery|testimonials|estimates|leads)/i) ||
-                          cleanSql.match(/DELETE FROM\s+(services|gallery|testimonials|estimates|leads)/i);
+  const collectionMatch = cleanSql.match(/FROM\s+(services|gallery|testimonials|estimates|leads|festival_offers)/i) ||
+                          cleanSql.match(/INTO\s+(services|gallery|testimonials|estimates|leads|festival_offers)/i) ||
+                          cleanSql.match(/UPDATE\s+(services|gallery|testimonials|estimates|leads|festival_offers)/i) ||
+                          cleanSql.match(/DELETE FROM\s+(services|gallery|testimonials|estimates|leads|festival_offers)/i);
 
   if (collectionMatch) {
     const table = collectionMatch[1].toLowerCase();
     
     if (cleanSql.toUpperCase().startsWith('SELECT')) {
-      const items = localData[table] || [];
+      let items = localData[table] || [];
+      if (cleanSql.includes('WHERE id =') && params.length > 0) {
+        items = items.filter(item => item.id === params[0]);
+      }
       return { rows: items.map(item => ({ id: item.id, data: item })) };
     }
 

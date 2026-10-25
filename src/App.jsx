@@ -11,6 +11,7 @@ import Contact from './components/Contact';
 import AdminPanel from './components/AdminPanel';
 import Footer from './components/Footer';
 import FloatingCTA from './components/FloatingCTA';
+import FestivalPopup from './components/FestivalPopup';
 import SEO from './components/SEO';
 import { CMSProvider, useCMS } from './context/cmsContext';
 
@@ -210,6 +211,9 @@ function MainApp() {
 
       {/* Floating CTA Buttons (WhatsApp, Call Now & Get Directions) */}
       <FloatingCTA />
+
+      {/* Public Festival Campaign Offer Popup (bypassed when on admin tab) */}
+      {activeTab !== 'admin' && <FestivalPopup />}
 
     </div>
   );

@@ -465,6 +465,9 @@ export const CMSProvider = ({ children }) => {
       return [];
     }
   });
+  // Festival Offers and Popup Management State (backend database is source of truth)
+  const [festivalOffers, setFestivalOffers] = useState([]);
+  const [activeFestivalOffer, setActiveFestivalOffer] = useState(null);
 
   const rawApiUrl = import.meta.env.VITE_API_URL || 'https://painter-backend-one.vercel.app';
   const API_BASE = rawApiUrl.replace(/\/+$/, '');
@@ -493,6 +496,8 @@ export const CMSProvider = ({ children }) => {
         if (Array.isArray(json.testimonials)) setTestimonials(json.testimonials);
         if (Array.isArray(json.estimates)) setEstimates(json.estimates);
         if (Array.isArray(json.contactLeads)) setContactLeads(json.contactLeads);
+        if (json.activeFestivalOffer !== undefined) setActiveFestivalOffer(json.activeFestivalOffer);
+        if (Array.isArray(json.festivalOffers)) setFestivalOffers(json.festivalOffers);
         if (json.hasAdminAuth) setNeedsSetup(false);
       }
       return json;
@@ -1084,6 +1089,130 @@ export const CMSProvider = ({ children }) => {
     }
   };
 
+  // ─── Festival Offers API Handlers ─────────────────────────────────────────
+
+  // Fetch active festival offer for public popup
+  const fetchActiveFestivalOffer = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/festival-offers/active`);
+      const json = await res.json();
+      if (json.success) {
+        setActiveFestivalOffer(json.activeOffer || null);
+        return json.activeOffer;
+      }
+      return null;
+    } catch (err) {
+      console.warn('Failed to fetch active festival offer:', err);
+      return null;
+    }
+  };
+
+  // Fetch all festival offers for admin
+  const fetchFestivalOffers = async () => {
+    try {
+      const token = sessionStorage.getItem('munnalal_admin_token');
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${API_BASE}/festival-offers`, { headers });
+      const json = await res.json();
+      if (json.success && Array.isArray(json.offers)) {
+        setFestivalOffers(json.offers);
+        return json.offers;
+      }
+      return [];
+    } catch (err) {
+      console.warn('Failed to fetch festival offers list:', err);
+      return [];
+    }
+  };
+
+  // Create festival offer
+  const createFestivalOffer = async (offerData) => {
+    const token = sessionStorage.getItem('munnalal_admin_token');
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE}/festival-offers`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(offerData)
+    });
+
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.error || `Failed to create festival offer (HTTP ${res.status})`);
+    }
+
+    setFestivalOffers(prev => [json.data, ...prev]);
+    await fetchActiveFestivalOffer();
+    return json.data;
+  };
+
+  // Update festival offer
+  const updateFestivalOffer = async (id, offerData) => {
+    const token = sessionStorage.getItem('munnalal_admin_token');
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE}/festival-offers/${id}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(offerData)
+    });
+
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.error || `Failed to update festival offer (HTTP ${res.status})`);
+    }
+
+    setFestivalOffers(prev => prev.map(o => o.id === id ? json.data : o));
+    await fetchActiveFestivalOffer();
+    return json.data;
+  };
+
+  // Toggle festival offer enabled status
+  const toggleFestivalOffer = async (id) => {
+    const token = sessionStorage.getItem('munnalal_admin_token');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE}/festival-offers/${id}/toggle`, {
+      method: 'PATCH',
+      headers
+    });
+
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.error || `Failed to toggle festival offer (HTTP ${res.status})`);
+    }
+
+    setFestivalOffers(prev => prev.map(o => o.id === id ? json.data : o));
+    await fetchActiveFestivalOffer();
+    return json.data;
+  };
+
+  // Delete festival offer
+  const deleteFestivalOffer = async (id) => {
+    const token = sessionStorage.getItem('munnalal_admin_token');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE}/festival-offers/${id}`, {
+      method: 'DELETE',
+      headers
+    });
+
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.error || `Failed to delete festival offer (HTTP ${res.status})`);
+    }
+
+    setFestivalOffers(prev => prev.filter(o => o.id !== id));
+    await fetchActiveFestivalOffer();
+    return true;
+  };
+
   return (
     <CMSContext.Provider value={{
       refreshCMSData,
@@ -1123,7 +1252,16 @@ export const CMSProvider = ({ children }) => {
       deleteEstimate,
       contactLeads,
       addContactLead,
-      deleteContactLead
+      deleteContactLead,
+      festivalOffers,
+      activeFestivalOffer,
+      setActiveFestivalOffer,
+      fetchActiveFestivalOffer,
+      fetchFestivalOffers,
+      createFestivalOffer,
+      updateFestivalOffer,
+      toggleFestivalOffer,
+      deleteFestivalOffer
     }}>
       {children}
     </CMSContext.Provider>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import FestivalPopup from './FestivalPopup';
 import { 
-  ShieldCheck, Lock, LogOut, Image as ImageIcon, Plus, Trash2, Edit3, Save, 
+  ShieldCheck, Lock, LogOut, Image as ImageIcon, Plus, Trash2, Edit3, Save, Gift, Sparkles, Clock, Power, AlertTriangle, 
   CheckCircle, RefreshCw, LayoutDashboard, Sliders, Layers, Info, MessageSquare, 
   Phone, Users, Star, Upload, FileText, Check, AlertCircle, Eye, EyeOff, MapPin, Compass, Navigation, ExternalLink,
   Video, Camera, Film, Calendar
@@ -42,7 +43,13 @@ const AdminPanel = ({ onBack }) => {
     estimates,
     deleteEstimate,
     contactLeads,
-    deleteContactLead
+    deleteContactLead,
+    festivalOffers,
+    fetchFestivalOffers,
+    createFestivalOffer,
+    updateFestivalOffer,
+    toggleFestivalOffer,
+    deleteFestivalOffer
   } = useCMS();
 
   const [isSyncingDb, setIsSyncingDb] = useState(false);
@@ -152,6 +159,245 @@ const AdminPanel = ({ onBack }) => {
     } finally {
       setSetupIsLoading(false);
     }
+  };
+
+
+  // ─── FESTIVAL OFFERS STATE & HANDLERS ──────────────────────────────────────
+  const defaultOfferForm = {
+    festivalName: '',
+    theme: 'diwali',
+    heading: '',
+    description: '',
+    offerDetails: '',
+    bannerImage: '',
+    ctaText: 'Claim Offer on WhatsApp',
+    ctaType: 'whatsapp',
+    ctaDestination: '',
+    startDate: '',
+    endDate: '',
+    isEnabled: true,
+    cooldownHours: 24
+  };
+
+  const [offerForm, setOfferForm] = useState(defaultOfferForm);
+  const [editingOfferId, setEditingOfferId] = useState(null);
+  const [isOfferFormOpen, setIsOfferFormOpen] = useState(false);
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+  const [previewOfferModal, setPreviewOfferModal] = useState(null);
+  const [deleteOfferConfirmId, setDeleteOfferConfirmId] = useState(null);
+  const [offerFormError, setOfferFormError] = useState('');
+  const [isSavingOffer, setIsSavingOffer] = useState(false);
+
+  // Auto-fetch festival offers when tab opens
+  useEffect(() => {
+    if (activeTab === 'festival-offers' && isAuthenticated) {
+      fetchFestivalOffers();
+    }
+  }, [activeTab, isAuthenticated]);
+
+  // Convert ISO string to YYYY-MM-DDTHH:mm for datetime-local input (Asia/Kolkata)
+  const toDatetimeLocal = (isoStr) => {
+    if (!isoStr) return '';
+    try {
+      const d = new Date(isoStr);
+      if (isNaN(d.getTime())) return '';
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      const parts = formatter.formatToParts(d);
+      const getP = (t) => parts.find(p => p.type === t)?.value || '00';
+      return `${getP('year')}-${getP('month')}-${getP('day')}T${getP('hour')}:${getP('minute')}`;
+    } catch {
+      return '';
+    }
+  };
+
+  // Format date for display in IST
+  const formatIST = (dateStr) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      }) + ' IST';
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const getOfferStatusBadge = (item) => {
+    if (!item.isEnabled) {
+      return { label: 'Disabled', color: 'bg-slate-500/20 text-slate-400 border-slate-500/30' };
+    }
+    const now = Date.now();
+    const start = new Date(item.startDate).getTime();
+    const end = new Date(item.endDate).getTime();
+    if (now < start) {
+      return { label: 'Scheduled', color: 'bg-amber-500/20 text-amber-300 border-amber-400/30' };
+    }
+    if (now > end) {
+      return { label: 'Expired', color: 'bg-red-500/20 text-red-400 border-red-500/30' };
+    }
+    return { label: 'Live Now', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 animate-pulse' };
+  };
+
+  const handleCreateOfferClick = () => {
+    // Default start date = now in IST, end date = +7 days
+    const now = new Date();
+    const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    setOfferForm({
+      ...defaultOfferForm,
+      startDate: toDatetimeLocal(now.toISOString()),
+      endDate: toDatetimeLocal(nextWeek.toISOString())
+    });
+    setEditingOfferId(null);
+    setOfferFormError('');
+    setIsOfferFormOpen(true);
+  };
+
+  const handleEditOfferClick = (item) => {
+    setEditingOfferId(item.id);
+    const detailsStr = Array.isArray(item.offerDetails)
+      ? item.offerDetails.join('\n')
+      : (item.offerDetails || '');
+    setOfferForm({
+      festivalName: item.festivalName || '',
+      theme: item.theme || 'custom',
+      heading: item.heading || '',
+      description: item.description || '',
+      offerDetails: detailsStr,
+      bannerImage: item.bannerImage || '',
+      ctaText: item.ctaText || 'Claim Offer on WhatsApp',
+      ctaType: item.ctaType || 'whatsapp',
+      ctaDestination: item.ctaDestination || '',
+      startDate: toDatetimeLocal(item.startDate),
+      endDate: toDatetimeLocal(item.endDate),
+      isEnabled: item.isEnabled !== undefined ? item.isEnabled : true,
+      cooldownHours: item.cooldownHours !== undefined ? item.cooldownHours : 24
+    });
+    setOfferFormError('');
+    setIsOfferFormOpen(true);
+  };
+
+  const handleBannerUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      if (!file.type.startsWith('image/')) {
+        showToast('Please select a valid image file (JPG, PNG, WEBP).', 'error');
+        return;
+      }
+      setIsUploadingBanner(true);
+      showToast('Uploading banner image...');
+      const res = await uploadMedia(file);
+      setOfferForm(prev => ({ ...prev, bannerImage: res.url }));
+      showToast('Banner uploaded successfully!');
+    } catch (err) {
+      console.error('Banner upload error:', err);
+      showToast(err.message || 'Failed to upload banner', 'error');
+    } finally {
+      setIsUploadingBanner(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleSaveOffer = async (e) => {
+    e.preventDefault();
+    setOfferFormError('');
+
+    if (!offerForm.festivalName.trim()) {
+      setOfferFormError('Please enter a festival name.');
+      return;
+    }
+    if (!offerForm.heading.trim()) {
+      setOfferFormError('Please enter an offer heading.');
+      return;
+    }
+    if (!offerForm.startDate || !offerForm.endDate) {
+      setOfferFormError('Both start and end dates are required.');
+      return;
+    }
+    if (new Date(offerForm.endDate).getTime() <= new Date(offerForm.startDate).getTime()) {
+      setOfferFormError('Campaign end date must be after start date.');
+      return;
+    }
+
+    setIsSavingOffer(true);
+    try {
+      const payload = {
+        ...offerForm,
+        offerDetails: offerForm.offerDetails.split('\n').map(s => s.trim()).filter(Boolean)
+      };
+
+      if (editingOfferId) {
+        await updateFestivalOffer(editingOfferId, payload);
+        showToast('Festival offer updated successfully!');
+      } else {
+        await createFestivalOffer(payload);
+        showToast('New festival offer created successfully!');
+      }
+      setIsOfferFormOpen(false);
+      setEditingOfferId(null);
+      setOfferForm(defaultOfferForm);
+    } catch (err) {
+      console.error('Save offer error:', err);
+      setOfferFormError(err.message || 'Failed to save offer. Please try again.');
+    } finally {
+      setIsSavingOffer(false);
+    }
+  };
+
+  const handleToggleOffer = async (id) => {
+    try {
+      await toggleFestivalOffer(id);
+      showToast('Offer status updated!');
+    } catch (err) {
+      showToast(err.message || 'Failed to toggle offer', 'error');
+    }
+  };
+
+  const handleDeleteOffer = async () => {
+    if (!deleteOfferConfirmId) return;
+    try {
+      await deleteFestivalOffer(deleteOfferConfirmId);
+      showToast('Festival offer deleted successfully.');
+      setDeleteOfferConfirmId(null);
+    } catch (err) {
+      showToast(err.message || 'Failed to delete offer', 'error');
+    }
+  };
+
+  const handlePreviewCurrentForm = () => {
+    const previewObj = {
+      id: editingOfferId || 'preview_offer',
+      festivalName: offerForm.festivalName || 'Diwali Special',
+      theme: offerForm.theme || 'diwali',
+      heading: offerForm.heading || 'Flat 20% Off on Interior & Exterior Painting',
+      description: offerForm.description || 'Celebrate with premium finishes & dust-free sanding.',
+      offerDetails: offerForm.offerDetails ? offerForm.offerDetails.split('\n').filter(Boolean) : ['Free Dampness Site Check', '100% Asian Paints Royale Emulsion'],
+      bannerImage: offerForm.bannerImage,
+      ctaText: offerForm.ctaText || 'Claim Offer on WhatsApp',
+      ctaType: offerForm.ctaType || 'whatsapp',
+      ctaDestination: offerForm.ctaDestination,
+      startDate: offerForm.startDate,
+      endDate: offerForm.endDate,
+      isEnabled: true,
+      cooldownHours: offerForm.cooldownHours
+    };
+    setPreviewOfferModal(previewObj);
   };
 
   // Active dashboard tab
@@ -1044,6 +1290,23 @@ const AdminPanel = ({ onBack }) => {
               >
                 <MessageSquare className="w-4 h-4" />
                 <span>Customer Leads ({estimates.length + contactLeads.length})</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('festival-offers')}
+                className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold flex items-center justify-between transition-colors ${
+                  activeTab === 'festival-offers'
+                    ? 'bg-brand-500 text-white shadow-md'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Gift className="w-4 h-4 text-amber-400" />
+                  <span>Festival Offers</span>
+                </div>
+                {festivalOffers.some(o => o.isEnabled) && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Active campaign present" />
+                )}
               </button>
 
               <button

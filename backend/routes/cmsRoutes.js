@@ -69,6 +69,46 @@ const parseData = (row) => {
   return row.data;
 };
 
+// Helper to ensure IST (+05:30) offset for datetime strings
+const ensureIstIsoString = (dateStr) => {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const trimmed = dateStr.trim();
+  if (trimmed.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(trimmed)) {
+    return trimmed.length === 16 ? `${trimmed}:00+05:30` : `${trimmed}+05:30`;
+  }
+  return trimmed;
+};
+
+// Helper to determine currently active offer in Asia/Kolkata
+const getActiveOfferFromList = (offers) => {
+  if (!Array.isArray(offers) || offers.length === 0) return null;
+  const now = Date.now();
+
+  const activeCandidates = offers.filter(offer => {
+    if (!offer || !offer.isEnabled) return false;
+    const startStr = ensureIstIsoString(offer.startDate);
+    const endStr = ensureIstIsoString(offer.endDate);
+    const start = new Date(startStr).getTime();
+    const end = new Date(endStr).getTime();
+    if (isNaN(start) || isNaN(end)) return false;
+    return now >= start && now <= end;
+  });
+
+  if (activeCandidates.length === 0) return null;
+
+  // Prioritize most recently updated / created
+  activeCandidates.sort((a, b) => {
+    const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+    const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+    return timeB - timeA;
+  });
+
+  return activeCandidates[0];
+};
+
 // ─── DATABASE DIAGNOSTICS & INITIALIZATION ────────────────────────────────────
 router.get('/db-status', async (req, res) => {
   try {
@@ -103,6 +143,9 @@ router.get('/all', async (req, res) => {
     const estimatesRes = await query(`SELECT data FROM estimates ORDER BY created_at DESC`);
     const leadsRes = await query(`SELECT data FROM leads ORDER BY created_at DESC`);
     const authRes = await query(`SELECT * FROM admin_auth WHERE id = 1`);
+    const festivalOffersRes = await query(`SELECT data FROM festival_offers ORDER BY created_at DESC`);
+    const allFestivalOffers = (festivalOffersRes.rows || []).map(r => parseData(r));
+    const activeOffer = getActiveOfferFromList(allFestivalOffers);
 
     res.json({
       success: true,
@@ -115,7 +158,9 @@ router.get('/all', async (req, res) => {
       testimonials: testimonialsRes.rows.map(r => parseData(r)),
       estimates: estimatesRes.rows.map(r => parseData(r)),
       contactLeads: leadsRes.rows.map(r => parseData(r)),
-      hasAdminAuth: authRes.rows.length > 0
+      hasAdminAuth: authRes.rows.length > 0,
+      activeFestivalOffer: activeOffer || null,
+      festivalOffers: allFestivalOffers
     });
   } catch (err) {
     console.error('Error fetching all CMS data:', err);
@@ -635,6 +680,209 @@ router.delete('/leads/:id', async (req, res) => {
     res.json({ success: true, id });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
+// ─── FESTIVAL OFFERS & POPUP CRUD ──────────────────────────────────────────
+
+// Public: Fetch currently active festival campaign (Asia/Kolkata schedule & enabled)
+router.get('/festival-offers/active', async (req, res) => {
+  try {
+    const result = await query('SELECT data FROM festival_offers ORDER BY created_at DESC');
+    const allOffers = (result.rows || []).map(r => parseData(r));
+    const activeOffer = getActiveOfferFromList(allOffers);
+    res.json({
+      success: true,
+      activeOffer: activeOffer || null
+    });
+  } catch (err) {
+    console.error('Error fetching active festival offer:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch active festival offer' });
+  }
+});
+
+// Admin: List all festival offers
+router.get('/festival-offers', requireAdminAuth, async (req, res) => {
+  try {
+    const result = await query('SELECT data FROM festival_offers ORDER BY created_at DESC');
+    const offers = (result.rows || []).map(r => parseData(r));
+    res.json({
+      success: true,
+      offers
+    });
+  } catch (err) {
+    console.error('Error fetching festival offers:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch festival offers' });
+  }
+});
+
+// Admin: Create festival offer
+router.post('/festival-offers', requireAdminAuth, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const festivalName = (body.festivalName || '').trim();
+    const theme = (body.theme || 'custom').toLowerCase().trim();
+    const heading = (body.heading || '').trim();
+    const description = (body.description || body.subheading || '').trim();
+    const offerDetails = Array.isArray(body.offerDetails)
+      ? body.offerDetails.map(d => String(d).trim()).filter(Boolean)
+      : (body.offerDetails ? String(body.offerDetails).split('\n').map(s => s.trim()).filter(Boolean) : []);
+    const bannerImage = (body.bannerImage || '').trim();
+    const ctaText = (body.ctaText || 'Claim Offer on WhatsApp').trim();
+    const ctaType = ['whatsapp', 'call', 'estimate', 'link'].includes(body.ctaType) ? body.ctaType : 'whatsapp';
+    const ctaDestination = (body.ctaDestination || '').trim();
+    const startDate = ensureIstIsoString(body.startDate);
+    const endDate = ensureIstIsoString(body.endDate);
+    const isEnabled = body.isEnabled !== undefined ? Boolean(body.isEnabled) : true;
+    const cooldownHours = Number.isInteger(Number(body.cooldownHours)) ? Math.max(0, Math.min(720, Number(body.cooldownHours))) : 24;
+
+    if (!festivalName) {
+      return res.status(400).json({ success: false, error: 'Festival name is required.' });
+    }
+    if (!heading) {
+      return res.status(400).json({ success: false, error: 'Offer heading is required.' });
+    }
+    const validThemes = ['diwali', 'holi', 'navratri', 'eid', 'christmas', 'custom'];
+    if (!validThemes.includes(theme)) {
+      return res.status(400).json({ success: false, error: `Invalid theme. Allowed: ${validThemes.join(', ')}` });
+    }
+    if (!startDate || !endDate || isNaN(new Date(startDate).getTime()) || isNaN(new Date(endDate).getTime())) {
+      return res.status(400).json({ success: false, error: 'Valid campaign start and end dates are required.' });
+    }
+    if (new Date(endDate).getTime() <= new Date(startDate).getTime()) {
+      return res.status(400).json({ success: false, error: 'Campaign end date must be after start date.' });
+    }
+
+    const id = body.id || 'offer_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+    const nowIso = new Date().toISOString();
+
+    const newOffer = {
+      id,
+      festivalName,
+      theme,
+      heading,
+      description,
+      offerDetails,
+      bannerImage,
+      ctaText,
+      ctaType,
+      ctaDestination,
+      startDate,
+      endDate,
+      isEnabled,
+      cooldownHours,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    };
+
+    await query('INSERT INTO festival_offers (id, data) VALUES ($1, $2)', [id, JSON.stringify(newOffer)]);
+    res.json({ success: true, data: newOffer });
+  } catch (err) {
+    console.error('Error creating festival offer:', err);
+    res.status(500).json({ success: false, error: err.message || 'Failed to create festival offer' });
+  }
+});
+
+// Admin: Update festival offer
+router.put('/festival-offers/:id', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = req.body || {};
+
+    const festivalName = (body.festivalName || '').trim();
+    const theme = (body.theme || 'custom').toLowerCase().trim();
+    const heading = (body.heading || '').trim();
+    const description = (body.description || body.subheading || '').trim();
+    const offerDetails = Array.isArray(body.offerDetails)
+      ? body.offerDetails.map(d => String(d).trim()).filter(Boolean)
+      : (body.offerDetails ? String(body.offerDetails).split('\n').map(s => s.trim()).filter(Boolean) : []);
+    const bannerImage = (body.bannerImage || '').trim();
+    const ctaText = (body.ctaText || 'Claim Offer on WhatsApp').trim();
+    const ctaType = ['whatsapp', 'call', 'estimate', 'link'].includes(body.ctaType) ? body.ctaType : 'whatsapp';
+    const ctaDestination = (body.ctaDestination || '').trim();
+    const startDate = ensureIstIsoString(body.startDate);
+    const endDate = ensureIstIsoString(body.endDate);
+    const isEnabled = body.isEnabled !== undefined ? Boolean(body.isEnabled) : true;
+    const cooldownHours = Number.isInteger(Number(body.cooldownHours)) ? Math.max(0, Math.min(720, Number(body.cooldownHours))) : 24;
+
+    if (!festivalName) {
+      return res.status(400).json({ success: false, error: 'Festival name is required.' });
+    }
+    if (!heading) {
+      return res.status(400).json({ success: false, error: 'Offer heading is required.' });
+    }
+    const validThemes = ['diwali', 'holi', 'navratri', 'eid', 'christmas', 'custom'];
+    if (!validThemes.includes(theme)) {
+      return res.status(400).json({ success: false, error: `Invalid theme. Allowed: ${validThemes.join(', ')}` });
+    }
+    if (!startDate || !endDate || isNaN(new Date(startDate).getTime()) || isNaN(new Date(endDate).getTime())) {
+      return res.status(400).json({ success: false, error: 'Valid campaign start and end dates are required.' });
+    }
+    if (new Date(endDate).getTime() <= new Date(startDate).getTime()) {
+      return res.status(400).json({ success: false, error: 'Campaign end date must be after start date.' });
+    }
+
+    const updatedOffer = {
+      ...body,
+      id,
+      festivalName,
+      theme,
+      heading,
+      description,
+      offerDetails,
+      bannerImage,
+      ctaText,
+      ctaType,
+      ctaDestination,
+      startDate,
+      endDate,
+      isEnabled,
+      cooldownHours,
+      updatedAt: new Date().toISOString()
+    };
+
+    await query('UPDATE festival_offers SET data = $2 WHERE id = $1', [id, JSON.stringify(updatedOffer)]);
+    res.json({ success: true, data: updatedOffer });
+  } catch (err) {
+    console.error('Error updating festival offer:', err);
+    res.status(500).json({ success: false, error: err.message || 'Failed to update festival offer' });
+  }
+});
+
+// Admin: Toggle offer isEnabled
+router.patch('/festival-offers/:id/toggle', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await query('SELECT data FROM festival_offers WHERE id = $1', [id]);
+    if (!result.rows || result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Festival offer not found' });
+    }
+
+    const existing = parseData(result.rows[0]);
+    const updatedOffer = {
+      ...existing,
+      isEnabled: !existing.isEnabled,
+      updatedAt: new Date().toISOString()
+    };
+
+    await query('UPDATE festival_offers SET data = $2 WHERE id = $1', [id, JSON.stringify(updatedOffer)]);
+    res.json({ success: true, data: updatedOffer });
+  } catch (err) {
+    console.error('Error toggling festival offer:', err);
+    res.status(500).json({ success: false, error: err.message || 'Failed to toggle festival offer' });
+  }
+});
+
+// Admin: Delete festival offer
+router.delete('/festival-offers/:id', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await query('DELETE FROM festival_offers WHERE id = $1', [id]);
+    res.json({ success: true, id });
+  } catch (err) {
+    console.error('Error deleting festival offer:', err);
+    res.status(500).json({ success: false, error: err.message || 'Failed to delete festival offer' });
   }
 });
 
