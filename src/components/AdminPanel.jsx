@@ -2452,7 +2452,10 @@ const AdminPanel = ({ onBack }) => {
                                 src={normalizeMediaUrl(item.bannerImage)}
                                 alt={item.festivalName}
                                 className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 flex-shrink-0"
-                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                onError={(e) => {
+                                  console.error('Offer list banner image failed to load for URL:', normalizeMediaUrl(item.bannerImage) || item.bannerImage);
+                                  e.currentTarget.style.display = 'none';
+                                }}
                               />
                             )}
                             <div className="space-y-1.5 flex-1">
@@ -2835,7 +2838,11 @@ const AdminPanel = ({ onBack }) => {
                           alt="Banner Preview"
                           className="w-full h-full object-cover"
                           onLoad={() => setBannerPreviewFailed(false)}
-                          onError={() => setBannerPreviewFailed(true)}
+                          onError={(e) => {
+                            const failingUrl = normalizeMediaUrl(offerForm.bannerImage) || offerForm.bannerImage;
+                            console.error('Banner preview image failed to load for URL:', failingUrl, e);
+                            setBannerPreviewFailed(true);
+                          }}
                         />
                         <span className="absolute bottom-2 left-2 px-2.5 py-0.5 rounded-lg bg-black/70 backdrop-blur-sm text-emerald-400 text-[10px] font-semibold flex items-center gap-1">
                           <CheckCircle className="w-3 h-3" />

@@ -412,6 +412,7 @@ router.post('/upload', requireAdminAuth, (req, res, next) => {
 
     let publicUrl = '';
     let publicId = null;
+    let fileDataForDb = null;
     const resourceType = isVideo ? 'video' : 'image';
 
     if (isCloudinaryConfigured()) {
@@ -423,7 +424,7 @@ router.post('/upload', requireAdminAuth, (req, res, next) => {
       publicUrl = cldResult.secure_url || cldResult.url;
       publicId = cldResult.public_id;
     } else {
-      // Local development disk & serverless tmp fallback (NO Base64 stored in database)
+      // Local development disk & serverless tmp fallback
       try {
         const uploadsDir = path.resolve(__dirname, '../uploads');
         if (!fs.existsSync(uploadsDir)) {
@@ -443,13 +444,16 @@ router.post('/upload', requireAdminAuth, (req, res, next) => {
         // Ignored
       }
       publicUrl = `${baseUrl}/api/cms/media/${mediaId}`;
+      // When Cloudinary is unconfigured in serverless, store Base64 in media_files.data
+      // so ephemeral serverless containers can serve the file persistently without 404s
+      fileDataForDb = fileBuffer.toString('base64');
     }
 
-    // Store in PostgreSQL media_files table (URL + metadata ONLY, data = NULL)
+    // Store in PostgreSQL media_files table (URL + metadata, data populated when Cloudinary is not configured)
     await query(
       `INSERT INTO media_files (id, filename, mime_type, size, url, public_id, resource_type, data)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [mediaId, safeFilename, mimeType, size, publicUrl, publicId, resourceType, null]
+      [mediaId, safeFilename, mimeType, size, publicUrl, publicId, resourceType, fileDataForDb]
     );
 
     res.json({
@@ -524,6 +528,7 @@ router.post('/review-upload', checkReviewUploadRateLimit, (req, res, next) => {
 
     let publicUrl = '';
     let publicId = null;
+    let fileDataForDb = null;
 
     if (isCloudinaryConfigured()) {
       const cldResult = await uploadStreamToCloudinary(fileBuffer, {
@@ -553,13 +558,14 @@ router.post('/review-upload', checkReviewUploadRateLimit, (req, res, next) => {
         // Ignored
       }
       publicUrl = `${baseUrl}/api/cms/media/${mediaId}`;
+      fileDataForDb = fileBuffer.toString('base64');
     }
 
-    // Save record to DB with URL and data = null
+    // Save record to DB with URL and data
     await query(
       `INSERT INTO media_files (id, filename, mime_type, size, url, public_id, resource_type, data)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [mediaId, safeFilename, mimeType, size, publicUrl, publicId, 'image', null]
+      [mediaId, safeFilename, mimeType, size, publicUrl, publicId, 'image', fileDataForDb]
     );
 
     res.json({
@@ -641,7 +647,7 @@ router.get('/media/:id', async (req, res) => {
       }
     }
 
-    // Fallback: Legacy serving if stored as Base64 in data column
+    // Serving from database fallback (when local disk file does not exist or container is fresh)
     if (row.data) {
       const mimeType = row.mime_type || 'application/octet-stream';
       const fileBuffer = Buffer.from(row.data, 'base64');
@@ -652,6 +658,18 @@ router.get('/media/:id', async (req, res) => {
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       res.setHeader('Accept-Ranges', 'bytes');
       res.setHeader('Access-Control-Allow-Origin', '*');
+
+      // Lazily populate /tmp cache for warm subsequent requests in this container
+      try {
+        const tmpDir = path.join(os.tmpdir(), 'munnalal_uploads');
+        if (!fs.existsSync(tmpDir)) {
+          fs.mkdirSync(tmpDir, { recursive: true });
+        }
+        const ext = path.extname(row.filename || '') || (mimeType.startsWith('video/') ? '.mp4' : '.jpg');
+        fs.writeFileSync(path.join(tmpDir, `${id}${ext}`), fileBuffer);
+      } catch (cacheErr) {
+        // Non-fatal if filesystem is read-only
+      }
 
       // Handle range request for video playback / seeking
       const range = req.headers.range;

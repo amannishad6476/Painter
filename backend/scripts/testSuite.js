@@ -3,6 +3,7 @@ import app from '../server.js';
 import { generateAdminToken } from '../utils/auth.js';
 import { query } from '../config/db.js';
 import { normalizeMediaUrl } from '../../src/utils/mediaUtils.js';
+import { isCloudinaryConfigured } from '../config/cloudinary.js';
 
 const PORT = 5599;
 
@@ -181,7 +182,11 @@ async function runTests() {
     const storedRow = dbCheck.rows[0];
     assert(Boolean(storedRow), 'Record successfully stored in media_files table');
     assert(Boolean(storedRow.url), 'media_files.url is populated');
-    assert(storedRow.data === null || storedRow.data === undefined, 'CRITICAL: media_files.data is NULL (ZERO Base64 stored in database!)');
+    if (isCloudinaryConfigured()) {
+      assert(storedRow.data === null || storedRow.data === undefined, 'Cloudinary configured: media_files.data is NULL (stored in Cloudinary CDN)');
+    } else {
+      assert(Boolean(storedRow.data), 'Cloudinary fallback: media_files.data stores Base64 for serverless resilience');
+    }
 
     // 6. Public Customer Review Photo Upload
     console.log('\n--- 6. Public Customer Review Photo Upload ---');
@@ -260,6 +265,43 @@ async function runTests() {
         'GET /api/cms/media/:id does not self-redirect (prevents ERR_TOO_MANY_REDIRECTS loop)'
       );
     }
+
+    // 7.2 Regression Test: Media serving when local disk file is missing but database record has data (Serverless resilience)
+    console.log('\n--- 7.2 Regression: Serverless Fallback from Database Data (Disk File Missing) ---');
+    const missingDiskMediaId = 'med_reg_disk_missing_' + Date.now();
+    await query(
+      `INSERT INTO media_files (id, filename, mime_type, size, url, public_id, resource_type, data)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        missingDiskMediaId,
+        `${missingDiskMediaId}.png`,
+        'image/png',
+        testPng.length,
+        `http://127.0.0.1:${PORT}/api/cms/media/${missingDiskMediaId}`,
+        null,
+        'image',
+        testPng.toString('base64')
+      ]
+    );
+
+    const fallbackMediaRes = await makeRequest({
+      path: `/api/cms/media/${missingDiskMediaId}`
+    });
+    assert(fallbackMediaRes.statusCode === 200, 'GET /api/cms/media/:id returns HTTP 200 when disk file is absent but database has data');
+    assert(fallbackMediaRes.headers?.['content-type'] === 'image/png', 'Fallback media served with correct Content-Type: image/png');
+    assert(Number(fallbackMediaRes.headers?.['content-length']) === testPng.length, 'Fallback media served with correct Content-Length');
+
+    // Clean up fallback test record
+    await query(`DELETE FROM media_files WHERE id = $1`, [missingDiskMediaId]);
+
+    // 7.3 Regression Test: Graceful 404 error handling when media does not exist
+    console.log('\n--- 7.3 Regression: Graceful 404 for Non-Existent Media ---');
+    const nonExistentRes = await makeRequest({
+      path: '/api/cms/media/med_non_existent_fake_id_12345'
+    });
+    assert(nonExistentRes.statusCode === 404, 'GET /api/cms/media/:id returns HTTP 404 for non-existent ID');
+    assert(nonExistentRes.json?.success === false, 'Non-existent media response has success: false');
+    assert(nonExistentRes.json?.error === 'Media file not found', 'Non-existent media error message is descriptive');
 
     // 8. Festival Offers & Popup Management
     console.log('\n--- 8. Festival Offers & Popup Management ---');
