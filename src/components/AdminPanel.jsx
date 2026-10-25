@@ -7,6 +7,7 @@ import {
   Video, Camera, Film, Calendar
 } from 'lucide-react';
 import { useCMS } from '../context/cmsContext';
+import { normalizeMediaUrl } from '../utils/mediaUtils';
 
 const AdminPanel = ({ onBack }) => {
   const {
@@ -196,6 +197,7 @@ const AdminPanel = ({ onBack }) => {
   const [deleteOfferConfirmId, setDeleteOfferConfirmId] = useState(null);
   const [offerFormError, setOfferFormError] = useState('');
   const [isSavingOffer, setIsSavingOffer] = useState(false);
+  const [bannerPreviewFailed, setBannerPreviewFailed] = useState(false);
 
   // Auto-fetch festival offers when tab opens
   useEffect(() => {
@@ -274,6 +276,7 @@ const AdminPanel = ({ onBack }) => {
     });
     setEditingOfferId(null);
     setOfferFormError('');
+    setBannerPreviewFailed(false);
     setIsOfferFormOpen(true);
   };
 
@@ -288,7 +291,7 @@ const AdminPanel = ({ onBack }) => {
       heading: item.heading || '',
       description: item.description || '',
       offerDetails: detailsStr,
-      bannerImage: item.bannerImage || '',
+      bannerImage: item.bannerImage ? normalizeMediaUrl(item.bannerImage) : '',
       ctaText: item.ctaText || 'Claim Offer on WhatsApp',
       ctaType: item.ctaType || 'whatsapp',
       ctaDestination: item.ctaDestination || '',
@@ -298,6 +301,7 @@ const AdminPanel = ({ onBack }) => {
       cooldownHours: item.cooldownHours !== undefined ? item.cooldownHours : 24
     });
     setOfferFormError('');
+    setBannerPreviewFailed(false);
     setIsOfferFormOpen(true);
   };
 
@@ -312,7 +316,9 @@ const AdminPanel = ({ onBack }) => {
       setIsUploadingBanner(true);
       showToast('Uploading banner image...');
       const res = await uploadMedia(file);
-      setOfferForm(prev => ({ ...prev, bannerImage: res.url }));
+      const fullUrl = normalizeMediaUrl(res.url);
+      setOfferForm(prev => ({ ...prev, bannerImage: fullUrl }));
+      setBannerPreviewFailed(false);
       showToast('Banner uploaded successfully!');
     } catch (err) {
       console.error('Banner upload error:', err);
@@ -474,7 +480,7 @@ const AdminPanel = ({ onBack }) => {
       setIsUploadingMedia(true);
       showToast('Uploading banner photo...');
       const res = await uploadMedia(file);
-      setBannerForm(prev => ({ ...prev, bgImage: res.url }));
+      setBannerForm(prev => ({ ...prev, bgImage: normalizeMediaUrl(res.url) }));
       showToast('Banner background image uploaded!');
     } catch (err) {
       console.error('Banner upload error:', err);
@@ -2443,9 +2449,10 @@ const AdminPanel = ({ onBack }) => {
                           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center flex-1">
                             {item.bannerImage && (
                               <img
-                                src={item.bannerImage}
+                                src={normalizeMediaUrl(item.bannerImage)}
                                 alt={item.festivalName}
                                 className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 flex-shrink-0"
+                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
                               />
                             )}
                             <div className="space-y-1.5 flex-1">
@@ -2807,8 +2814,11 @@ const AdminPanel = ({ onBack }) => {
                     type="text"
                     placeholder="https://images.unsplash.com/... or upload file"
                     value={offerForm.bannerImage}
-                    onChange={e => setOfferForm({ ...offerForm, bannerImage: e.target.value })}
-                    className="flex-1 px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500"
+                    onChange={e => {
+                      setOfferForm({ ...offerForm, bannerImage: e.target.value });
+                      setBannerPreviewFailed(false);
+                    }}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500 font-mono"
                   />
                   <label className="px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs cursor-pointer flex items-center justify-center gap-1.5 flex-shrink-0 transition-colors">
                     <Upload className="w-3.5 h-3.5" />
@@ -2817,8 +2827,33 @@ const AdminPanel = ({ onBack }) => {
                   </label>
                 </div>
                 {offerForm.bannerImage && (
-                  <div className="mt-2 h-28 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
-                    <img src={offerForm.bannerImage} alt="Banner Preview" className="w-full h-full object-cover" />
+                  <div className="mt-2 space-y-2">
+                    {!bannerPreviewFailed ? (
+                      <div className="relative h-32 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
+                        <img
+                          src={normalizeMediaUrl(offerForm.bannerImage)}
+                          alt="Banner Preview"
+                          className="w-full h-full object-cover"
+                          onLoad={() => setBannerPreviewFailed(false)}
+                          onError={() => setBannerPreviewFailed(true)}
+                        />
+                        <span className="absolute bottom-2 left-2 px-2.5 py-0.5 rounded-lg bg-black/70 backdrop-blur-sm text-emerald-400 text-[10px] font-semibold flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3" />
+                          <span>Preview Loaded</span>
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2.5">
+                        <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                          <div className="font-bold text-amber-200">Unable to load image preview</div>
+                          <p className="text-[11px] text-amber-300/90 leading-relaxed">
+                            The image could not be loaded from <code className="bg-slate-900 px-1.5 py-0.5 rounded text-amber-200 break-all select-all font-mono">{normalizeMediaUrl(offerForm.bannerImage) || offerForm.bannerImage}</code>.
+                            Please ensure the URL is valid, begins with <code className="text-white font-bold">https://</code>, or click <strong>Upload Image</strong> to upload a new photo.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

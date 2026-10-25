@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { normalizeMediaUrl } from '../utils/mediaUtils';
 
 const CMSContext = createContext();
 
@@ -819,6 +820,7 @@ export const CMSProvider = ({ children }) => {
       throw new Error(json.error || 'Server did not return a valid media URL.');
     }
 
+    json.url = normalizeMediaUrl(json.url);
     return json;
   };
 
@@ -852,6 +854,7 @@ export const CMSProvider = ({ children }) => {
       throw new Error(json.error || 'Server did not return a valid photo URL.');
     }
 
+    json.url = normalizeMediaUrl(json.url);
     return json;
   };
 

@@ -15,6 +15,9 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust reverse proxy (Vercel, Cloudflare, Nginx) so req.protocol & req.hostname are accurate
+app.set('trust proxy', 1);
+
 // Allowed Origins list
 const allowedOrigins = [
   'https://www.munnalalpainter.in',

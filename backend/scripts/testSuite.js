@@ -2,6 +2,7 @@ import http from 'http';
 import app from '../server.js';
 import { generateAdminToken } from '../utils/auth.js';
 import { query } from '../config/db.js';
+import { normalizeMediaUrl } from '../../src/utils/mediaUtils.js';
 
 const PORT = 5599;
 
@@ -252,6 +253,13 @@ async function runTests() {
       serveMedia.statusCode === 200 || serveMedia.statusCode === 302,
       `GET /api/cms/media/:id serves or redirects with code ${serveMedia.statusCode}`
     );
+    if (serveMedia.statusCode === 302) {
+      const loc = serveMedia.headers?.location || '';
+      assert(
+        !loc.includes(`/media/${uploadedMediaId}`),
+        'GET /api/cms/media/:id does not self-redirect (prevents ERR_TOO_MANY_REDIRECTS loop)'
+      );
+    }
 
     // 8. Festival Offers & Popup Management
     console.log('\n--- 8. Festival Offers & Popup Management ---');
@@ -456,6 +464,38 @@ async function runTests() {
 
     const activeAfterDelete = await makeRequest({ path: '/api/cms/festival-offers/active' });
     assert(activeAfterDelete.json?.activeOffer === null, 'Active offer is null after deletion of campaign');
+
+    // 9. URL Normalization & Broken Preview Prevention
+    console.log('\n--- 9. URL Normalization & Broken Preview Prevention ---');
+    const fixedTruncated = normalizeMediaUrl('ainter-backend-one.vercel.app/api/cms/media/med_1792955362917_gpxbyn');
+    assert(
+      fixedTruncated === 'https://painter-backend-one.vercel.app/api/cms/media/med_1792955362917_gpxbyn',
+      'Normalizes truncated domain ainter- -> https://painter-backend-one.vercel.app'
+    );
+
+    const fixedMissingScheme = normalizeMediaUrl('painter-backend-one.vercel.app/api/cms/media/med_123');
+    assert(
+      fixedMissingScheme === 'https://painter-backend-one.vercel.app/api/cms/media/med_123',
+      'Prepends https:// to domain names without protocol scheme'
+    );
+
+    const fixedCloudinaryScheme = normalizeMediaUrl('//res.cloudinary.com/demo/image/upload/sample.jpg');
+    assert(
+      fixedCloudinaryScheme === 'https://res.cloudinary.com/demo/image/upload/sample.jpg',
+      'Normalizes protocol-relative // URLs to https://'
+    );
+
+    const fixedRelative = normalizeMediaUrl('/api/cms/media/med_123');
+    assert(
+      fixedRelative === '/api/cms/media/med_123',
+      'Preserves and handles valid relative /api paths'
+    );
+
+    const fixedNoSlash = normalizeMediaUrl('api/cms/media/med_123');
+    assert(
+      fixedNoSlash === '/api/cms/media/med_123',
+      'Adds leading slash to unslashed relative paths (api/ -> /api/)'
+    );
 
   } catch (err) {
     console.error('Test execution error:', err);

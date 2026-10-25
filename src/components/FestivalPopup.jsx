@@ -4,6 +4,7 @@ import {
   Gift, CheckCircle2, Calendar, Star, Flame
 } from 'lucide-react';
 import { useCMS } from '../context/cmsContext';
+import { normalizeMediaUrl } from '../utils/mediaUtils';
 
 // Theme Configurations for Festivals
 const THEME_CONFIGS = {
@@ -249,7 +250,7 @@ const FestivalPopup = ({ previewOffer = null, isPreview = false, onClose = null 
     ? offer.offerDetails.filter(Boolean)
     : (offer.offerDetails ? String(offer.offerDetails).split('\n').filter(Boolean) : []);
 
-  const bannerImg = offer.bannerImage || theme.defaultBanner;
+  const bannerImg = offer.bannerImage ? normalizeMediaUrl(offer.bannerImage) : theme.defaultBanner;
 
   return (
     <div 
@@ -294,6 +295,11 @@ const FestivalPopup = ({ previewOffer = null, isPreview = false, onClose = null 
               alt={offer.festivalName || 'Festival Offer'} 
               className="w-full h-full object-cover object-center filter brightness-95"
               loading="lazy"
+              onError={(e) => {
+                if (theme?.defaultBanner && e.currentTarget.src !== theme.defaultBanner) {
+                  e.currentTarget.src = theme.defaultBanner;
+                }
+              }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent" />
             

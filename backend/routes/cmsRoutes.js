@@ -1,17 +1,53 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 import { query, getDbStatus } from '../config/db.js';
 import { initDb } from '../db/initDb.js';
-import { isCloudinaryConfigured, uploadStreamToCloudinary } from '../config/cloudinary.js';
+import cloudinary, { isCloudinaryConfigured, uploadStreamToCloudinary } from '../config/cloudinary.js';
 import { requireAdminAuth, verifyPassword, generateAdminToken } from '../utils/auth.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = express.Router();
+
+/**
+ * Safely constructs absolute base URL from incoming request headers or environment variables.
+ * Handles comma-separated forwarded headers and ensures production uses HTTPS.
+ */
+const getBaseUrl = (req) => {
+  if (process.env.BACKEND_PUBLIC_URL) {
+    return process.env.BACKEND_PUBLIC_URL.replace(/\/+$/, '');
+  }
+
+  // Parse forwarded protocol safely (handling comma-separated proxy chains)
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  let protocol = 'https';
+  if (forwardedProto && typeof forwardedProto === 'string') {
+    protocol = forwardedProto.split(',')[0].trim();
+  } else if (req.protocol) {
+    protocol = req.protocol;
+  }
+
+  // Parse forwarded host safely
+  const rawHost = (req.headers['x-forwarded-host'] || req.get('host') || '').toString();
+  let host = rawHost.split(',')[0].trim() || 'localhost:5000';
+
+  // Fix truncated domain if ever forwarded as ainter-
+  if (host.startsWith('ainter-backend-one.vercel.app')) {
+    host = 'painter-backend-one.vercel.app';
+  }
+
+  // Enforce HTTPS for non-localhost hosts
+  if (!host.includes('localhost') && !host.includes('127.0.0.1')) {
+    protocol = 'https';
+  }
+
+  return `${protocol}://${host}`;
+};
 
 // Memory storage for multer (supports streaming to DB or Cloud)
 const upload = multer({
@@ -372,9 +408,7 @@ router.post('/upload', requireAdminAuth, (req, res, next) => {
     const ext = path.extname(filename) || (isVideo ? '.mp4' : '.jpg');
     const safeFilename = `${mediaId}${ext}`;
 
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-    const host = req.headers['x-forwarded-host'] || req.get('host');
-    const baseUrl = `${protocol}://${host}`;
+    const baseUrl = getBaseUrl(req);
 
     let publicUrl = '';
     let publicId = null;
@@ -389,7 +423,7 @@ router.post('/upload', requireAdminAuth, (req, res, next) => {
       publicUrl = cldResult.secure_url || cldResult.url;
       publicId = cldResult.public_id;
     } else {
-      // Local development disk fallback (NO Base64 stored in database)
+      // Local development disk & serverless tmp fallback (NO Base64 stored in database)
       try {
         const uploadsDir = path.resolve(__dirname, '../uploads');
         if (!fs.existsSync(uploadsDir)) {
@@ -398,6 +432,15 @@ router.post('/upload', requireAdminAuth, (req, res, next) => {
         fs.writeFileSync(path.join(uploadsDir, safeFilename), fileBuffer);
       } catch (diskErr) {
         // Ignored if read-only filesystem on Vercel
+      }
+      try {
+        const tmpDir = path.join(os.tmpdir(), 'munnalal_uploads');
+        if (!fs.existsSync(tmpDir)) {
+          fs.mkdirSync(tmpDir, { recursive: true });
+        }
+        fs.writeFileSync(path.join(tmpDir, safeFilename), fileBuffer);
+      } catch (tmpErr) {
+        // Ignored
       }
       publicUrl = `${baseUrl}/api/cms/media/${mediaId}`;
     }
@@ -477,9 +520,7 @@ router.post('/review-upload', checkReviewUploadRateLimit, (req, res, next) => {
     const ext = path.extname(filename) || '.jpg';
     const safeFilename = `${mediaId}${ext}`;
 
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-    const host = req.headers['x-forwarded-host'] || req.get('host');
-    const baseUrl = `${protocol}://${host}`;
+    const baseUrl = getBaseUrl(req);
 
     let publicUrl = '';
     let publicId = null;
@@ -501,6 +542,15 @@ router.post('/review-upload', checkReviewUploadRateLimit, (req, res, next) => {
         fs.writeFileSync(path.join(uploadsDir, safeFilename), fileBuffer);
       } catch (diskErr) {
         // Ignored in serverless
+      }
+      try {
+        const tmpDir = path.join(os.tmpdir(), 'munnalal_uploads');
+        if (!fs.existsSync(tmpDir)) {
+          fs.mkdirSync(tmpDir, { recursive: true });
+        }
+        fs.writeFileSync(path.join(tmpDir, safeFilename), fileBuffer);
+      } catch (tmpErr) {
+        // Ignored
       }
       publicUrl = `${baseUrl}/api/cms/media/${mediaId}`;
     }
@@ -546,6 +596,21 @@ router.get('/media/:id', async (req, res) => {
       // Fallback to database
     }
 
+    // Check tmp directory as secondary fallback
+    try {
+      const tmpDir = path.join(os.tmpdir(), 'munnalal_uploads');
+      if (fs.existsSync(tmpDir)) {
+        const tmpFiles = fs.readdirSync(tmpDir);
+        const match = tmpFiles.find(f => f.startsWith(id));
+        if (match) {
+          const filePath = path.join(tmpDir, match);
+          return res.sendFile(filePath);
+        }
+      }
+    } catch (tmpErr) {
+      // Ignored
+    }
+
     // Fetch from database
     const result = await query(`SELECT * FROM media_files WHERE id = $1`, [id]);
     if (!result.rows || result.rows.length === 0) {
@@ -554,9 +619,26 @@ router.get('/media/:id', async (req, res) => {
 
     const row = result.rows[0];
 
-    // If record has Cloudinary or external URL, redirect directly to CDN
-    if (row.url && (row.url.startsWith('http://') || row.url.startsWith('https://'))) {
+    // Helper to detect if a URL is pointing back to this media endpoint (avoid redirect loop)
+    const isSelfMediaUrl = (url) => {
+      if (!url || typeof url !== 'string') return false;
+      return url.includes(`/media/${id}`) || url.includes(`/api/cms/media/${id}`);
+    };
+
+    // If record has Cloudinary or external URL (and NOT self-referencing), redirect directly to CDN
+    if (row.url && (row.url.startsWith('http://') || row.url.startsWith('https://')) && !isSelfMediaUrl(row.url)) {
       return res.redirect(302, row.url);
+    }
+
+    // If Cloudinary is configured and public_id exists, construct Cloudinary secure URL and redirect
+    if (row.public_id && isCloudinaryConfigured()) {
+      const cldUrl = cloudinary.url(row.public_id, {
+        secure: true,
+        resource_type: row.resource_type || 'image'
+      });
+      if (cldUrl && !isSelfMediaUrl(cldUrl)) {
+        return res.redirect(302, cldUrl);
+      }
     }
 
     // Fallback: Legacy serving if stored as Base64 in data column
