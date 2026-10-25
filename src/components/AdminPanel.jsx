@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import FestivalPopup from './FestivalPopup';
 import { 
-  ShieldCheck, Lock, LogOut, Image as ImageIcon, Plus, Trash2, Edit3, Save, Gift, Sparkles, Clock, Power, AlertTriangle, 
+  ShieldCheck, Lock, LogOut, Image as ImageIcon, Plus, Trash2, Edit3, Save, Gift, Sparkles, Clock, Power, AlertTriangle, X, 
   CheckCircle, RefreshCw, LayoutDashboard, Sliders, Layers, Info, MessageSquare, 
   Phone, Users, Star, Upload, FileText, Check, AlertCircle, Eye, EyeOff, MapPin, Compass, Navigation, ExternalLink,
   Video, Camera, Film, Calendar
@@ -51,6 +51,15 @@ const AdminPanel = ({ onBack }) => {
     toggleFestivalOffer,
     deleteFestivalOffer
   } = useCMS();
+
+  // Active dashboard tab & toast notifications
+  const [activeTab, setActiveTab] = useState('overview');
+  const [toastMessage, setToastMessage] = useState('');
+
+  const showToast = (msg, type = 'success') => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 3500);
+  };
 
   const [isSyncingDb, setIsSyncingDb] = useState(false);
 
@@ -398,15 +407,6 @@ const AdminPanel = ({ onBack }) => {
       cooldownHours: offerForm.cooldownHours
     };
     setPreviewOfferModal(previewObj);
-  };
-
-  // Active dashboard tab
-  const [activeTab, setActiveTab] = useState('overview');
-  const [toastMessage, setToastMessage] = useState('');
-
-  const showToast = (msg) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(''), 3000);
   };
 
   // Async login handler
@@ -2374,6 +2374,167 @@ const AdminPanel = ({ onBack }) => {
               </div>
             )}
 
+            {/* TAB: FESTIVAL OFFERS & POPUPS */}
+            {activeTab === 'festival-offers' && (
+              <div className="space-y-6">
+                {/* Header Card */}
+                <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
+                        <Gift className="w-5 h-5" />
+                      </span>
+                      <h3 className="text-xl font-bold text-slate-900 dark:text-white">Festival Offers & Homepage Popups</h3>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1 max-w-xl">
+                      Launch time-sensitive festival offers, celebratory discounts (Diwali, Holi, Navratri, Eid, New Year), and high-converting homepage popups with WhatsApp CTAs.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={fetchFestivalOffers}
+                      className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center gap-1.5 transition-colors"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Refresh</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCreateOfferClick}
+                      className="px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs flex items-center gap-2 shadow-md transition-all"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Create New Offer</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Offers List */}
+                {festivalOffers.length === 0 ? (
+                  <div className="p-12 text-center rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+                    <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-500 mx-auto flex items-center justify-center">
+                      <Gift className="w-8 h-8" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-bold text-slate-900 dark:text-white">No Festival Campaigns Yet</h4>
+                      <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                        Create your first festival promotion (Diwali, Holi, Eid, or any custom celebration) to display a festive popup to website visitors.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCreateOfferClick}
+                      className="px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs inline-flex items-center gap-2 shadow-sm transition-all"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Create First Campaign</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {festivalOffers.map(item => {
+                      const status = getOfferStatusBadge(item);
+                      return (
+                        <div
+                          key={item.id}
+                          className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between"
+                        >
+                          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center flex-1">
+                            {item.bannerImage && (
+                              <img
+                                src={item.bannerImage}
+                                alt={item.festivalName}
+                                className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 flex-shrink-0"
+                              />
+                            )}
+                            <div className="space-y-1.5 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${status.color}`}>
+                                  {status.label}
+                                </span>
+                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 capitalize">
+                                  {item.theme} Theme
+                                </span>
+                                <span className="text-xs font-bold text-slate-900 dark:text-white">
+                                  {item.festivalName}
+                                </span>
+                              </div>
+                              <h4 className="text-base font-bold text-slate-900 dark:text-white">
+                                {item.heading}
+                              </h4>
+                              {item.description && (
+                                <p className="text-xs text-slate-500 line-clamp-2">
+                                  {item.description}
+                                </p>
+                              )}
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-400 pt-1">
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="w-3.5 h-3.5 text-brand-500" />
+                                  <span>{formatIST(item.startDate)} → {formatIST(item.endDate)}</span>
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-3.5 h-3.5 text-amber-500" />
+                                  <span>Cooldown: {item.cooldownHours || 24}h</span>
+                                </span>
+                                <span className="text-brand-500 font-semibold">
+                                  CTA: {item.ctaText}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex items-center gap-2 flex-wrap self-end lg:self-center border-t lg:border-t-0 pt-4 lg:pt-0 w-full lg:w-auto justify-end">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleOffer(item.id)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors ${
+                                item.isEnabled
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20'
+                                  : 'bg-slate-500/10 text-slate-400 border border-slate-500/20 hover:bg-slate-500/20'
+                              }`}
+                              title={item.isEnabled ? 'Deactivate campaign' : 'Activate campaign'}
+                            >
+                              <Power className="w-3.5 h-3.5" />
+                              <span>{item.isEnabled ? 'Active' : 'Disabled'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setPreviewOfferModal(item)}
+                              className="px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Preview</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleEditOfferClick(item)}
+                              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-brand-500 hover:text-white text-slate-600 dark:text-slate-300 transition-colors"
+                              title="Edit offer"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setDeleteOfferConfirmId(item.id)}
+                              className="p-2 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 hover:bg-red-600 hover:text-white transition-colors"
+                              title="Delete offer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* TAB: SETTINGS */}
             {activeTab === 'settings' && (
               <div className="space-y-6">
@@ -2533,6 +2694,300 @@ const AdminPanel = ({ onBack }) => {
 
         </div>
       </div>
+
+      {/* MODAL: CREATE / EDIT FESTIVAL OFFER */}
+      {isOfferFormOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="max-w-2xl w-full bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-6 my-8 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                  <Gift className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                    {editingOfferId ? 'Edit Festival Offer' : 'Create New Festival Offer'}
+                  </h3>
+                  <p className="text-xs text-slate-500">Configure theme, dates, banner, and WhatsApp call-to-action.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsOfferFormOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {offerFormError && (
+              <div className="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-xs font-bold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{offerFormError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveOffer} className="space-y-4 text-left">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Festival Theme */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Festival Theme *</label>
+                  <select
+                    value={offerForm.theme}
+                    onChange={e => setOfferForm({ ...offerForm, theme: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500"
+                  >
+                    <option value="diwali">🪔 Diwali Special</option>
+                    <option value="holi">🎨 Holi Dhamaka</option>
+                    <option value="navratri">🌸 Navratri Utsav</option>
+                    <option value="eid">🌙 Eid Mubarak</option>
+                    <option value="christmas">🎄 Christmas & New Year</option>
+                    <option value="custom">✨ Custom Festival</option>
+                  </select>
+                </div>
+
+                {/* Festival Name */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Festival / Campaign Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Diwali Dhamaka 2026"
+                    value={offerForm.festivalName}
+                    onChange={e => setOfferForm({ ...offerForm, festivalName: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+              </div>
+
+              {/* Offer Heading */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Offer Heading / Headline *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Flat 20% Off on Interior & Exterior Painting"
+                  value={offerForm.heading}
+                  onChange={e => setOfferForm({ ...offerForm, heading: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Description / Subtitle</label>
+                <textarea
+                  rows="2"
+                  placeholder="e.g. Transform your home before the festivities with dust-free sanding and Asian Paints Royale."
+                  value={offerForm.description}
+                  onChange={e => setOfferForm({ ...offerForm, description: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+
+              {/* Bullet Points */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Offer Highlights (1 per line)
+                </label>
+                <textarea
+                  rows="3"
+                  placeholder="Free Dampness & Moisture Site Check&#10;100% Genuine Asian Paints Royale&#10;Free Color Consultation"
+                  value={offerForm.offerDetails}
+                  onChange={e => setOfferForm({ ...offerForm, offerDetails: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+
+              {/* Banner Image */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Banner Image (Optional)</label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    placeholder="https://images.unsplash.com/... or upload file"
+                    value={offerForm.bannerImage}
+                    onChange={e => setOfferForm({ ...offerForm, bannerImage: e.target.value })}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                  <label className="px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs cursor-pointer flex items-center justify-center gap-1.5 flex-shrink-0 transition-colors">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>{isUploadingBanner ? 'Uploading…' : 'Upload Image'}</span>
+                    <input type="file" accept="image/*" disabled={isUploadingBanner} onChange={handleBannerUpload} className="hidden" />
+                  </label>
+                </div>
+                {offerForm.bannerImage && (
+                  <div className="mt-2 h-28 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
+                    <img src={offerForm.bannerImage} alt="Banner Preview" className="w-full h-full object-cover" />
+                  </div>
+                )}
+              </div>
+
+              {/* Dates IST */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Start Date & Time (IST) *</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={offerForm.startDate}
+                    onChange={e => setOfferForm({ ...offerForm, startDate: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">End Date & Time (IST) *</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={offerForm.endDate}
+                    onChange={e => setOfferForm({ ...offerForm, endDate: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+              </div>
+
+              {/* CTA Settings */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">CTA Button Text</label>
+                  <input
+                    type="text"
+                    value={offerForm.ctaText}
+                    onChange={e => setOfferForm({ ...offerForm, ctaText: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">CTA Action Type</label>
+                  <select
+                    value={offerForm.ctaType}
+                    onChange={e => setOfferForm({ ...offerForm, ctaType: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500"
+                  >
+                    <option value="whatsapp">WhatsApp Message</option>
+                    <option value="link">Custom URL Link</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                    {offerForm.ctaType === 'whatsapp' ? 'Custom WhatsApp #' : 'Target URL'}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder={offerForm.ctaType === 'whatsapp' ? 'Leave empty for official number' : 'https://...'}
+                    value={offerForm.ctaDestination}
+                    onChange={e => setOfferForm({ ...offerForm, ctaDestination: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+              </div>
+
+              {/* Cooldown & Active */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Dismiss Cooldown (Hours)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="720"
+                    value={offerForm.cooldownHours}
+                    onChange={e => setOfferForm({ ...offerForm, cooldownHours: Number(e.target.value) })}
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+                <div className="flex items-center gap-2 pt-6">
+                  <input
+                    type="checkbox"
+                    id="offerEnabled"
+                    checked={offerForm.isEnabled}
+                    onChange={e => setOfferForm({ ...offerForm, isEnabled: e.target.checked })}
+                    className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500"
+                  />
+                  <label htmlFor="offerEnabled" className="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
+                    Enable campaign immediately
+                  </label>
+                </div>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800 gap-3">
+                <button
+                  type="button"
+                  onClick={handlePreviewCurrentForm}
+                  className="px-4 py-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 font-bold text-xs flex items-center gap-1.5 transition-colors"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>Preview Popup</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsOfferFormOpen(false)}
+                    className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingOffer}
+                    className="px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs flex items-center gap-2 shadow-md disabled:opacity-50 transition-all"
+                  >
+                    {isSavingOffer ? (
+                      <><RefreshCw className="w-4 h-4 animate-spin" /> Saving…</>
+                    ) : (
+                      <><Save className="w-4 h-4" /> <span>{editingOfferId ? 'Update Offer' : 'Publish Offer'}</span></>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DELETE CONFIRMATION */}
+      {deleteOfferConfirmId && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 mx-auto flex items-center justify-center">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="text-lg font-bold text-slate-900 dark:text-white">Delete Festival Offer?</h4>
+              <p className="text-xs text-slate-500 mt-1">
+                Are you sure you want to delete this festival offer campaign? This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteOfferConfirmId(null)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteOffer}
+                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-md transition-colors"
+              >
+                Yes, Delete Offer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: LIVE PREVIEW POPUP */}
+      {previewOfferModal && (
+        <FestivalPopup
+          previewOffer={previewOfferModal}
+          isPreview={true}
+          onClose={() => setPreviewOfferModal(null)}
+        />
+      )}
     </section>
   );
 };
